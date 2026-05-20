@@ -98,9 +98,10 @@
 <style scoped>
 .layout-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
   gap: var(--vt-space-4);
   padding: var(--vt-space-4);
+  box-sizing: border-box;
 }
 
 /* 左侧 Sidebar */
