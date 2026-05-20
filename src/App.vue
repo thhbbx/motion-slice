@@ -240,4 +240,43 @@
   border: 1px solid var(--vt-primary);
   border-radius: var(--vt-radius-sm);
 }
+
+/* Inspector 面板 */
+.inspector-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--vt-space-4);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--vt-space-2) 0;
+  font-size: 14px;
+}
+
+.info-label {
+  font-size: 13px;
+}
+
+.info-value {
+  font-weight: 500;
+}
+
+.shake-placeholder {
+  padding: var(--vt-space-4);
+  text-align: center;
+  font-size: 13px;
+}
+
+.panel-actions {
+  margin-top: auto;
+  padding-top: var(--vt-space-4);
+}
+
+.panel-actions button {
+  width: 100%;
+}
 </style>
