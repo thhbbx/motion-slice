@@ -1,12 +1,13 @@
 <template>
-  <h1>Hello World!</h1>
-  <p>Welcome to your Electron application.</p>
+  <div class="video-tool-page">
+    <!-- 三栏布局容器 -->
+  </div>
 </template>
 
 <script setup lang="ts">
-console.log('👋 This message is being logged by "App.vue", included via Vite');
+// 纯静态布局，暂无逻辑
 </script>
 
 <style scoped>
-
+/* 布局样式将在后续步骤添加 */
 </style>
