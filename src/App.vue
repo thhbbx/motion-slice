@@ -168,4 +168,31 @@
 .card-meta {
   font-size: 12px;
 }
+
+/* 视频预览区 */
+.preview-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-xl);
+  overflow: hidden;
+  min-height: 0; /* 防止 flex 子元素溢出 */
+}
+
+.video-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vt-bg);
+}
+
+.stage-placeholder {
+  font-size: 14px;
+  text-align: center;
+}
 </style>
