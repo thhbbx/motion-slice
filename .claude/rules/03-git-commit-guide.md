@@ -23,3 +23,9 @@ globs: "*"
 - 如果是针对特定功能模块的修改，必须带上 scope。
     - 🟢 正确示例：`feat(ipc): 添加视频晃动分析的 preload 接口`
     - ❌ 错误示例：`feat: update api`
+
+## 4. 提交流程与频率控制 (Strict Commit Workflow)
+**这是最高优先级的行为约束：**
+- **禁止频繁自动提交：** 在使用 `executing-plans` 编写代码或调试期间，绝对禁止在每个小步骤完成后自作主张执行 `git commit`。
+- **等待人工放行：** 你只负责修改文件并验证运行结果。**只有在用户明确下达“可以提交代码了”的指令，或手动调用 `/chinese-commit-conventions` 时**，你才可以执行 commit 操作。
+- **保证逻辑闭环：** 坚决杜绝“保存即提交”的碎片化 commit。每一次 commit 都必须是一个完整、可运行、无明显 Bug 的逻辑单元。
