@@ -195,4 +195,49 @@
   font-size: 14px;
   text-align: center;
 }
+
+/* 时间轴区 */
+.timeline-area {
+  height: 300px;
+  flex-shrink: 0;
+  background: var(--vt-bg-elevated);
+  border: 1px solid var(--vt-border-strong);
+  border-radius: var(--vt-radius-xl);
+  padding: var(--vt-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-3);
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-3);
+  font-size: 14px;
+}
+
+.timeline-tracks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.timeline-track {
+  height: 48px;
+  background: var(--vt-bg-soft);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--vt-space-2);
+  gap: var(--vt-space-2);
+}
+
+.track-clip {
+  height: 32px;
+  background: var(--vt-primary-soft);
+  border: 1px solid var(--vt-primary);
+  border-radius: var(--vt-radius-sm);
+}
 </style>
