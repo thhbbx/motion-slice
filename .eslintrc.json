@@ -12,8 +12,11 @@
     "plugin:import/electron",
     "plugin:import/typescript"
   ],
-  "parser": "@typescript-eslint/parser",
+  "parser": "vue-eslint-parser",
   "rules": {
     "import/no-unresolved": "off"
+  },
+  "parserOptions": {
+    "parser": "@typescript-eslint/parser"
   }
 }
