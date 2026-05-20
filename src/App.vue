@@ -26,7 +26,26 @@
 
       <!-- 中间 Workspace -->
       <main class="workspace">
-        <!-- 占位内容将在下一步添加 -->
+        <!-- 上方：视频预览区 -->
+        <div class="preview-area">
+          <div class="video-stage">
+            <div class="stage-placeholder vt-muted">视频预览区域</div>
+          </div>
+        </div>
+
+        <!-- 下方：时间轴区 -->
+        <div class="timeline-area">
+          <div class="timeline-header">
+            <span class="vt-timecode">00:00:00:00</span>
+            <span class="vt-secondary">时间轴占位区</span>
+          </div>
+          <div class="timeline-tracks">
+            <div class="timeline-track">
+              <div class="track-clip" style="width: 30%; margin-left: 10%;"></div>
+              <div class="track-clip" style="width: 25%; margin-left: 5%;"></div>
+            </div>
+          </div>
+        </div>
       </main>
 
       <!-- 右侧 Inspector -->
