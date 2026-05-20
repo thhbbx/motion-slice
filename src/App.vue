@@ -50,7 +50,42 @@
 
       <!-- 右侧 Inspector -->
       <aside class="inspector">
-        <!-- 占位内容将在下一步添加 -->
+        <div class="vt-panel inspector-panel">
+          <div class="panel-header">
+            <h2 class="vt-title">视频信息</h2>
+          </div>
+          <div class="panel-content">
+            <div class="info-row">
+              <span class="info-label vt-secondary">分辨率</span>
+              <span class="info-value">1920 × 1080</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label vt-secondary">时长</span>
+              <span class="info-value vt-timecode">00:02:34</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label vt-secondary">帧率</span>
+              <span class="info-value">30 fps</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label vt-secondary">编码</span>
+              <span class="info-value">H.264</span>
+            </div>
+          </div>
+
+          <div class="panel-header" style="margin-top: var(--vt-space-6);">
+            <h2 class="vt-title">晃动分析</h2>
+          </div>
+          <div class="panel-content">
+            <div class="shake-placeholder vt-secondary">
+              暂无晃动分析数据
+            </div>
+          </div>
+
+          <div class="panel-actions">
+            <button class="vt-button-primary">导出切片</button>
+          </div>
+        </div>
       </aside>
     </div>
   </div>
