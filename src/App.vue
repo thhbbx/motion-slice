@@ -1,6 +1,21 @@
 <template>
   <div class="video-tool-page">
-    <!-- 三栏布局容器 -->
+    <div class="layout-container">
+      <!-- 左侧 Sidebar -->
+      <aside class="sidebar">
+        <!-- 占位内容将在下一步添加 -->
+      </aside>
+
+      <!-- 中间 Workspace -->
+      <main class="workspace">
+        <!-- 占位内容将在下一步添加 -->
+      </main>
+
+      <!-- 右侧 Inspector -->
+      <aside class="inspector">
+        <!-- 占位内容将在下一步添加 -->
+      </aside>
+    </div>
   </div>
 </template>
 
