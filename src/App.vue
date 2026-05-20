@@ -123,4 +123,49 @@
   width: 340px;
   flex-shrink: 0;
 }
+
+/* Sidebar 面板 */
+.sidebar-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--vt-space-4);
+}
+
+.panel-header {
+  margin-bottom: var(--vt-space-4);
+}
+
+.panel-header h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+/* 文件卡片 */
+.file-card {
+  padding: var(--vt-space-3);
+  cursor: pointer;
+}
+
+.file-card:hover {
+  border-color: var(--vt-border-strong);
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: var(--vt-space-1);
+}
+
+.card-meta {
+  font-size: 12px;
+}
 </style>
