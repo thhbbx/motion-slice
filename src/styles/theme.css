@@ -1,4 +1,5 @@
 .video-tool-page {
+    /* --- 1. 颜色系统 (Colors) --- */
     --vt-bg: #000000;
     --vt-bg-soft: #0b0b0d;
     --vt-bg-elevated: #111116;
@@ -10,53 +11,85 @@
     --vt-primary-hover: #5b46ff;
     --vt-primary-active: #3a28c9;
     --vt-primary-soft: rgba(79, 57, 246, 0.16);
+    --vt-primary-glow: rgba(79, 57, 246, 0.14); /* 苹果式微发光 */
 
+    /* 边框系统：利用透明度在深色背景上形成微妙的高光质感 */
     --vt-border: rgba(255, 255, 255, 0.08);
     --vt-border-strong: rgba(255, 255, 255, 0.14);
     --vt-border-active: rgba(79, 57, 246, 0.65);
 
+    /* 文本系统 */
     --vt-text: #ffffff;
     --vt-text-regular: #e8e8ea;
     --vt-text-secondary: #a0a0aa;
     --vt-text-muted: #777782;
     --vt-text-disabled: #5f5f66;
 
+    /* 功能色 */
     --vt-success: #30b08f;
     --vt-warning: #fec171;
     --vt-danger: #c03639;
     --vt-info: #4ab7bd;
     --vt-pink: #e65d6e;
 
+    /* --- 2. 空间韵律 (4px/8px Grid System) --- */
+    --vt-space-1: 4px;
+    --vt-space-2: 8px;
+    --vt-space-3: 12px;
+    --vt-space-4: 16px;
+    --vt-space-6: 24px;
+    --vt-space-8: 32px;
+    --vt-space-12: 48px;
+
+    --vt-radius-sm: 8px;
+    --vt-radius-md: 10px;
+    --vt-radius-lg: 12px;
+    --vt-radius-xl: 14px;
+    --vt-radius-full: 999px;
+
+    /* --- 3. 字体系统 (Typography) --- */
+    --vt-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --vt-font-mono: "JetBrains Mono", "SF Mono", Consolas, Menlo, monospace;
+
+    /* 页面基建 */
     min-height: 100vh;
+    font-family: var(--vt-font-sans);
     background:
             radial-gradient(circle at 24% 0%, rgba(79, 57, 246, 0.12), transparent 34%),
             var(--vt-bg);
     color: var(--vt-text-regular);
 }
 
+/* --- 面板与卡片 (Panels & Cards) --- */
 .video-tool-page .vt-panel {
     background: var(--vt-panel);
-    border: 1px solid var(--vt-border);
-    border-radius: 14px;
+    border: 1px solid var(--vt-border-strong); /* 强化边缘切割感 */
+    border-radius: var(--vt-radius-xl);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
     backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 .video-tool-page .vt-card {
     background: rgba(17, 17, 22, 0.86);
     border: 1px solid var(--vt-border);
-    border-radius: 12px;
+    border-radius: var(--vt-radius-lg);
+    transition: border-color 180ms ease;
 }
 
+/* --- 交互元素 (Buttons & Inputs) --- */
 .video-tool-page .vt-button-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     height: 40px;
-    padding: 0 16px;
+    padding: 0 var(--vt-space-4);
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--vt-radius-md);
     background: var(--vt-primary);
-    color: #ffffff;
+    color: var(--vt-text);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 500; /* 收敛字重，避免过粗 */
     cursor: pointer;
     transition:
             background 180ms ease,
@@ -66,7 +99,7 @@
 
 .video-tool-page .vt-button-primary:hover {
     background: var(--vt-primary-hover);
-    box-shadow: 0 0 0 4px rgba(79, 57, 246, 0.16);
+    box-shadow: 0 0 0 4px var(--vt-primary-glow);
 }
 
 .video-tool-page .vt-button-primary:active {
@@ -75,12 +108,16 @@
 }
 
 .video-tool-page .vt-button-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     height: 36px;
-    padding: 0 12px;
+    padding: 0 var(--vt-space-3);
     border: 1px solid var(--vt-border);
-    border-radius: 10px;
+    border-radius: var(--vt-radius-md);
     background: rgba(255, 255, 255, 0.04);
     color: var(--vt-text-regular);
+    font-size: 14px;
     cursor: pointer;
     transition:
             background 180ms ease,
@@ -92,39 +129,14 @@
     border-color: var(--vt-border-strong);
 }
 
-.video-tool-page .vt-tag {
-    display: inline-flex;
-    align-items: center;
-    height: 22px;
-    padding: 0 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    line-height: 1;
-    border: 1px solid var(--vt-border);
-}
-
-.video-tool-page .vt-tag-success {
-    color: var(--vt-success);
-    background: rgba(48, 176, 143, 0.12);
-}
-
-.video-tool-page .vt-tag-warning {
-    color: var(--vt-warning);
-    background: rgba(254, 193, 113, 0.12);
-}
-
-.video-tool-page .vt-tag-danger {
-    color: var(--vt-danger);
-    background: rgba(192, 54, 57, 0.14);
-}
-
 .video-tool-page .vt-input {
     height: 40px;
-    padding: 0 12px;
+    padding: 0 var(--vt-space-3);
     border: 1px solid var(--vt-border);
-    border-radius: 8px;
+    border-radius: var(--vt-radius-sm);
     background: rgba(26, 26, 30, 0.9);
     color: var(--vt-text-regular);
+    font-size: 14px;
     outline: none;
     transition:
             border-color 180ms ease,
@@ -133,7 +145,51 @@
 
 .video-tool-page .vt-input:focus {
     border-color: var(--vt-border-active);
-    box-shadow: 0 0 0 4px rgba(79, 57, 246, 0.14);
+    box-shadow: 0 0 0 4px var(--vt-primary-glow);
+}
+
+/* --- 标签 (Tags) --- */
+.video-tool-page .vt-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 24px; /* 贴合 4px 网格 */
+    padding: 0 var(--vt-space-2);
+    border-radius: var(--vt-radius-full);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em; /* 提升全大写英文的精致感 */
+    text-transform: uppercase;
+    line-height: 1;
+    border: 1px solid var(--vt-border);
+}
+
+.video-tool-page .vt-tag-success {
+    color: var(--vt-success);
+    background: rgba(48, 176, 143, 0.12);
+    border-color: rgba(48, 176, 143, 0.2);
+}
+
+.video-tool-page .vt-tag-warning {
+    color: var(--vt-warning);
+    background: rgba(254, 193, 113, 0.12);
+    border-color: rgba(254, 193, 113, 0.2);
+}
+
+.video-tool-page .vt-tag-danger {
+    color: var(--vt-danger);
+    background: rgba(192, 54, 57, 0.14);
+    border-color: rgba(192, 54, 57, 0.2);
+}
+
+/* --- 文本辅助类 --- */
+.video-tool-page .vt-timecode {
+    font-family: var(--vt-font-mono);
+    font-weight: 400;
+}
+
+.video-tool-page .vt-title {
+    color: var(--vt-text);
+    font-weight: 600;
 }
 
 .video-tool-page .vt-muted {
@@ -142,4 +198,17 @@
 
 .video-tool-page .vt-secondary {
     color: var(--vt-text-secondary);
+}
+
+/* --- 视频处理等待骨架屏 (Skeleton Loading) --- */
+@keyframes vt-skeleton-pulse {
+    0% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.4; }
+}
+
+.video-tool-page .vt-skeleton {
+    background: var(--vt-border);
+    border-radius: var(--vt-radius-sm);
+    animation: vt-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
