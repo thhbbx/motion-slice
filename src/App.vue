@@ -96,5 +96,31 @@
 </script>
 
 <style scoped>
-/* 布局样式将在后续步骤添加 */
+.layout-container {
+  display: flex;
+  height: 100vh;
+  gap: var(--vt-space-4);
+  padding: var(--vt-space-4);
+}
+
+/* 左侧 Sidebar */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+/* 中间 Workspace */
+.workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-4);
+  min-width: 0; /* 防止 flex 子元素溢出 */
+}
+
+/* 右侧 Inspector */
+.inspector {
+  width: 340px;
+  flex-shrink: 0;
+}
 </style>
