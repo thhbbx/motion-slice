@@ -8,6 +8,7 @@
         :src="videoSrc"
         controls
         @loadedmetadata="handleVideoLoaded"
+        @timeupdate="handleTimeUpdate"
         @error="handleVideoError"
       />
     </div>
@@ -27,7 +28,7 @@ import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 
 const videoStore = useVideoStore();
-const { activeVideo } = storeToRefs(videoStore);
+const { activeVideo, currentTime, duration } = storeToRefs(videoStore);
 
 const videoElement = ref<HTMLVideoElement | null>(null);
 
@@ -42,7 +43,11 @@ const videoSrc = computed(() => {
 
 // 视频加载完成
 function handleVideoLoaded() {
-  console.log('视频加载成功:', activeVideo.value?.name);
+  console.log('视频加载成功:', activeVideo.value?.name, '时长:', videoElement.value?.duration);
+  // 同步视频总时长到 Store
+  if (videoElement.value) {
+    videoStore.setDuration(videoElement.value.duration);
+  }
 }
 
 // 视频加载错误
@@ -50,10 +55,42 @@ function handleVideoError(event: Event) {
   console.error('视频加载失败:', activeVideo.value?.path, event);
 }
 
+// 播放器 timeupdate 事件：同步播放进度到 Store
+function handleTimeUpdate() {
+  if (videoElement.value) {
+    videoStore.setCurrentTime(videoElement.value.currentTime);
+  }
+}
+
 // 监听视频切换，重置播放器
-watch(activeVideo, (newVideo) => {
-  if (videoElement.value && newVideo) {
-    videoElement.value.currentTime = 0;
+watch(activeVideo, (newVideo, oldVideo) => {
+  // 只在视频真正切换时重置（包括从有到无、从无到有、从 A 到 B）
+  if (oldVideo !== newVideo) {
+    if (videoElement.value) {
+      videoElement.value.currentTime = 0;
+    }
+    videoStore.setCurrentTime(0);
+    // duration 由 loadedmetadata 事件负责设置，此处不需要重置为 0
+  }
+});
+
+// 防抖标志：防止 Store -> 播放器 -> Store 的循环更新
+const isSeekingFromStore = ref<boolean>(false);
+
+// 监听 Store 的 currentTime 变化，同步到播放器（用户点击时间轴时触发）
+watch(currentTime, (newTime) => {
+  if (!videoElement.value || isSeekingFromStore.value) return;
+
+  // 计算差值，只有当差值 > 0.1 秒时才认为是用户主动 seek
+  const diff = Math.abs(videoElement.value.currentTime - newTime);
+
+  if (diff > 0.1) {
+    isSeekingFromStore.value = true;
+    videoElement.value.currentTime = newTime;
+
+    setTimeout(() => {
+      isSeekingFromStore.value = false;
+    }, 100);
   }
 });
 </script>
