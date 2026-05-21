@@ -2,6 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerDialogHandlers } from './main/handlers/dialog-handler';
+import { registerShellHandlers } from './main/handlers/shell-handler';
+import { registerMetadataHandlers } from './main/handlers/metadata-handler';
 
 // 处理 Windows 安装/卸载时的快捷方式创建/删除
 if (started) {
@@ -37,6 +39,8 @@ const createWindow = () => {
 app.on('ready', () => {
   // 注册 IPC handlers
   registerDialogHandlers();
+  registerShellHandlers();
+  registerMetadataHandlers();
   createWindow();
 });
 

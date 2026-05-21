@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { FileNode } from './types/file-tree';
+import { FileNode, VideoMetadata } from './types/file-tree';
 
 // 暴露安全的 API 给渲染进程
 contextBridge.exposeInMainWorld('motionSlice', {
@@ -9,5 +9,22 @@ contextBridge.exposeInMainWorld('motionSlice', {
    */
   selectMediaFiles: (): Promise<FileNode[]> => {
     return ipcRenderer.invoke('dialog:select-media');
+  },
+
+  /**
+   * 在资源管理器中显示文件
+   * @param filePath 文件完整路径
+   */
+  showItemInFolder: (filePath: string): void => {
+    ipcRenderer.send('shell:show-item-in-folder', filePath);
+  },
+
+  /**
+   * 获取视频深度元数据
+   * @param filePath 视频文件完整路径
+   * @returns 视频元数据（8 个专业参数）
+   */
+  getVideoMetadata: (filePath: string): Promise<VideoMetadata> => {
+    return ipcRenderer.invoke('video:get-metadata', filePath);
   },
 });

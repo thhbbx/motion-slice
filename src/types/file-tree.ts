@@ -4,12 +4,20 @@
 export type FileNodeType = 'file' | 'directory';
 
 /**
- * 视频元数据（Mock 数据，未来集成 ffprobe 后替换）
+ * 视频元数据（深度解析）
  */
 export interface VideoMetadata {
-  duration: string; // 格式：HH:MM:SS 或 MM:SS
-  resolution: string; // 格式：1920x1080
-  size: string; // 格式：125.4 MB
+  // 基础属性
+  size: string; // 文件大小，格式：102.7 MB
+  duration: string; // 时长，格式：HH:mm:ss
+  resolution: string; // 分辨率，格式：1920x1080
+
+  // 深层属性（ffprobe 解析）
+  fps?: string; // 帧率，格式：30 fps 或 29.97 fps
+  videoCodec?: string; // 视频编码，如 h264, hevc
+  audioCodec?: string; // 音频编码，如 aac，无音频流则为 "无"
+  bitrate?: string; // 码率，格式：50 Mbps
+  createdAt?: string; // 创建时间，格式：2026-05-20 14:30
 }
 
 /**

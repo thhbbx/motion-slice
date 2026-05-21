@@ -1,5 +1,22 @@
 <template>
   <aside class="inspector">
+    <!-- SVG 图标库 -->
+    <svg style="display: none;">
+      <symbol id="icon-folder-open" viewBox="0 0 16 16">
+        <path
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M14 13.5V5.5a1 1 0 0 0-1-1H8.5L7 3H2.5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h10.5a1 1 0 0 0 1-1z"
+        />
+      </symbol>
+      <symbol id="icon-loader" viewBox="0 0 24 24">
+        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+      </symbol>
+    </svg>
+
     <div class="vt-panel inspector-panel">
       <!-- Tab 导航 -->
       <div class="inspector-tabs">
@@ -20,7 +37,16 @@
           <div v-if="activeVideo" class="properties-section">
             <!-- 文件名（大字号，粗字重） -->
             <div class="file-header">
-              <div class="file-name">{{ activeVideo.name }}</div>
+              <div class="file-name-row">
+                <div class="file-name">{{ activeVideo.name }}</div>
+                <!-- 加载状态指示器 -->
+                <div v-if="isFetchingMetadata" class="loading-indicator">
+                  <svg class="loading-spinner" width="14" height="14">
+                    <use href="#icon-loader"></use>
+                  </svg>
+                  <span class="loading-text vt-muted">读取中...</span>
+                </div>
+              </div>
               <!-- 路径（小字号，弱化，自动换行） -->
               <div class="file-path vt-muted">{{ activeVideo.path }}</div>
             </div>
@@ -221,10 +247,14 @@
       <div class="inspector-actions">
         <button
           v-if="activeTab === 'properties'"
-          class="vt-button-ghost"
+          class="vt-button-ghost action-button action-button-fusion"
           :disabled="!activeVideo"
+          @click="handleShowInFolder"
         >
-          在资源管理器中显示
+          <svg class="button-icon button-icon-windows" width="16" height="16">
+            <use href="#icon-folder-open"></use>
+          </svg>
+          <span>在资源管理器中显示</span>
         </button>
         <button
           v-else-if="activeTab === 'analysis'"
@@ -251,7 +281,7 @@ import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 
 const videoStore = useVideoStore();
-const { activeVideo } = storeToRefs(videoStore);
+const { activeVideo, isFetchingMetadata } = storeToRefs(videoStore);
 
 const activeTab = ref<'properties' | 'analysis' | 'export'>('properties');
 
@@ -282,6 +312,19 @@ function toggleAnalysisSettings() {
   analysisSettingsExpanded.value = !analysisSettingsExpanded.value;
 }
 
+/**
+ * 在资源管理器中显示当前视频文件
+ */
+function handleShowInFolder() {
+  if (!activeVideo.value) return;
+
+  try {
+    window.motionSlice.showItemInFolder(activeVideo.value.path);
+  } catch (error) {
+    console.error('打开资源管理器失败:', error);
+  }
+}
+
 // 格式化文件大小（安全处理 NaN）
 function formatFileSize(sizeStr: string | undefined): string {
   if (!sizeStr) return '--';
@@ -305,48 +348,20 @@ function formatFileSize(sizeStr: string | undefined): string {
 
 // 格式化帧率
 function formatFrameRate(metadata: any): string {
-  if (!metadata || !metadata.frameRate) return '--';
-  const fps = parseFloat(metadata.frameRate);
-  if (isNaN(fps)) return '--';
-  return `${fps} fps`;
+  if (!metadata || !metadata.fps) return '--';
+  return metadata.fps;
 }
 
 // 格式化码率
 function formatBitrate(metadata: any): string {
   if (!metadata || !metadata.bitrate) return '--';
-  const bitrate = parseFloat(metadata.bitrate);
-  if (isNaN(bitrate)) return '--';
-
-  // 如果已经是格式化的字符串，直接返回
-  if (typeof metadata.bitrate === 'string' && /[KM]bps/i.test(metadata.bitrate)) {
-    return metadata.bitrate;
-  }
-
-  // 按 bps 格式化
-  if (bitrate < 1000) return `${bitrate.toFixed(0)} bps`;
-  if (bitrate < 1000000) return `${(bitrate / 1000).toFixed(0)} Kbps`;
-  return `${(bitrate / 1000000).toFixed(1)} Mbps`;
+  return metadata.bitrate;
 }
 
 // 格式化创建时间
 function formatCreatedTime(metadata: any): string {
-  if (!metadata || !metadata.createdTime) return '--';
-
-  try {
-    const date = new Date(metadata.createdTime);
-    if (isNaN(date.getTime())) return '--';
-
-    // 格式化为 YYYY-MM-DD HH:mm
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
-  } catch {
-    return '--';
-  }
+  if (!metadata || !metadata.createdAt) return '--';
+  return metadata.createdAt;
 }
 </script>
 
@@ -429,11 +444,48 @@ function formatCreatedTime(metadata: any): string {
   gap: var(--vt-space-2);
 }
 
+.file-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vt-space-3);
+  min-height: 20px; /* 防止布局跳动 */
+}
+
 .file-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--vt-text);
   line-height: 1.4;
+  flex: 1;
+}
+
+/* 加载状态指示器 */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  flex-shrink: 0;
+}
+
+.loading-spinner {
+  flex-shrink: 0;
+  color: var(--vt-primary);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .file-path {
@@ -739,5 +791,28 @@ function formatCreatedTime(metadata: any): string {
   display: flex;
   flex-direction: column;
   gap: var(--vt-space-2);
+}
+
+/* 操作按钮图标 */
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vt-space-2);
+}
+
+.button-icon {
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.8;
+  transition: opacity 180ms ease;
+}
+
+.action-button:hover:not(:disabled) .button-icon {
+  opacity: 1;
+}
+
+.action-button:disabled .button-icon {
+  opacity: 0.4;
 }
 </style>
