@@ -102,6 +102,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileTreeStore } from '../store/file-tree';
+import { useVideoStore } from '../store/useVideoStore';
 import type { FileNode } from '../types/file-tree';
 
 interface Props {
@@ -112,11 +113,12 @@ interface Props {
 const props = defineProps<Props>();
 
 const fileTreeStore = useFileTreeStore();
-const { selectedFileId } = storeToRefs(fileTreeStore);
+const videoStore = useVideoStore();
 
-// 计算属性：是否选中
+// 计算属性：是否选中（改为通过 activeVideo 判断）
 const isSelected = computed(() => {
-  return props.node.type === 'file' && selectedFileId.value === props.node.id;
+  return props.node.type === 'file' &&
+         videoStore.activeVideo?.path === props.node.path;
 });
 
 // 计算属性：是否展开（仅目录）
@@ -130,8 +132,10 @@ function handleNodeClick() {
     // 切换目录展开/折叠
     fileTreeStore.toggleDirectory(props.node.id);
   } else {
-    // 选中文件
+    // 选中文件（保留原有逻辑）
     fileTreeStore.selectFile(props.node.id);
+    // 新增：同步更新 videoStore
+    videoStore.setActiveVideo(props.node);
   }
 }
 </script>
