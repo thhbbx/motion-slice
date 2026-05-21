@@ -6,11 +6,7 @@
     <!-- 中间 Workspace -->
     <main class="workspace">
       <!-- 上方：视频预览区 -->
-      <div class="preview-area">
-        <div class="video-stage">
-          <div class="stage-placeholder vt-muted">视频预览区域</div>
-        </div>
-      </div>
+      <VideoPlayer />
 
       <!-- 下方：时间轴区 -->
       <div class="timeline-area">
@@ -71,6 +67,7 @@
 
 <script setup lang="ts">
 import Sidebar from './components/Sidebar.vue';
+import VideoPlayer from './components/VideoPlayer.vue';
 </script>
 
 <style scoped>
@@ -104,31 +101,7 @@ import Sidebar from './components/Sidebar.vue';
   flex-direction: column;
 }
 
-/* 视频预览区 */
-.preview-area {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--vt-bg);
-  border: 1px solid var(--vt-border);
-  border-radius: var(--vt-radius-xl);
-  overflow: hidden;
-}
-
-.video-stage {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--vt-bg);
-}
-
-.stage-placeholder {
-  font-size: 14px;
-  text-align: center;
-}
+/* VideoPlayer 组件占据 flex: 1 空间 */
 
 /* 时间轴区 */
 .timeline-area {
