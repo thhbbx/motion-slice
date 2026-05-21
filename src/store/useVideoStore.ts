@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import type { FileNode } from '../types/file-tree';
 
 export const useVideoStore = defineStore('video', () => {
