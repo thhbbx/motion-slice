@@ -18,24 +18,50 @@
         <!-- 属性 Tab -->
         <div v-if="activeTab === 'properties'" class="tab-pane">
           <div v-if="activeVideo" class="properties-section">
-            <h3 class="section-title vt-title">视频信息</h3>
-            <div class="info-row">
-              <span class="info-label vt-secondary">文件名</span>
-              <span class="info-value">{{ activeVideo.name }}</span>
+            <!-- 文件名（大字号，粗字重） -->
+            <div class="file-header">
+              <div class="file-name">{{ activeVideo.name }}</div>
+              <!-- 路径（小字号，弱化，自动换行） -->
+              <div class="file-path vt-muted">{{ activeVideo.path }}</div>
             </div>
-            <div class="info-row">
-              <span class="info-label vt-secondary">路径</span>
-              <span class="info-value vt-muted" :title="activeVideo.path">
-                {{ truncatePath(activeVideo.path) }}
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-label vt-secondary">大小</span>
-              <span class="info-value">{{ formatFileSize(activeVideo.size) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label vt-secondary">类型</span>
-              <span class="info-value">{{ activeVideo.type }}</span>
+
+            <!-- 分割线 -->
+            <div class="divider"></div>
+
+            <!-- 规格列表（左右对齐 Key-Value） -->
+            <div class="specs-list">
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">文件大小</span>
+                <span class="spec-value">{{ formatFileSize(activeVideo.metadata?.size) }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">时长</span>
+                <span class="spec-value vt-timecode">{{ activeVideo.metadata?.duration || '--' }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">分辨率</span>
+                <span class="spec-value">{{ activeVideo.metadata?.resolution || '--' }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">帧率</span>
+                <span class="spec-value">{{ formatFrameRate(activeVideo.metadata) }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">视频编码</span>
+                <span class="spec-value">{{ activeVideo.metadata?.videoCodec || '--' }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">音频编码</span>
+                <span class="spec-value">{{ activeVideo.metadata?.audioCodec || '--' }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">码率</span>
+                <span class="spec-value">{{ formatBitrate(activeVideo.metadata) }}</span>
+              </div>
+              <div class="spec-row">
+                <span class="spec-label vt-secondary">创建时间</span>
+                <span class="spec-value">{{ formatCreatedTime(activeVideo.metadata) }}</span>
+              </div>
             </div>
           </div>
 
@@ -191,10 +217,28 @@
         </div>
       </div>
 
-      <!-- 底部操作按钮 -->
+      <!-- 底部操作按钮（上下文感知） -->
       <div class="inspector-actions">
-        <button class="vt-button-primary" :disabled="!activeVideo">
-          开始分析
+        <button
+          v-if="activeTab === 'properties'"
+          class="vt-button-ghost"
+          :disabled="!activeVideo"
+        >
+          在资源管理器中显示
+        </button>
+        <button
+          v-else-if="activeTab === 'analysis'"
+          class="vt-button-primary"
+          :disabled="!activeVideo"
+        >
+          开始检测晃动
+        </button>
+        <button
+          v-else-if="activeTab === 'export'"
+          class="vt-button-primary"
+          :disabled="!activeVideo"
+        >
+          执行导出
         </button>
       </div>
     </div>
@@ -238,18 +282,71 @@ function toggleAnalysisSettings() {
   analysisSettingsExpanded.value = !analysisSettingsExpanded.value;
 }
 
-// 截断路径显示
-function truncatePath(path: string): string {
-  if (path.length <= 40) return path;
-  return '...' + path.slice(-37);
+// 格式化文件大小（安全处理 NaN）
+function formatFileSize(sizeStr: string | undefined): string {
+  if (!sizeStr) return '--';
+
+  // 尝试从字符串中提取数字（如 "125.4 MB" -> 125.4）
+  const match = sizeStr.match(/[\d.]+/);
+  if (!match) return sizeStr; // 如果已经是格式化的字符串，直接返回
+
+  const bytes = parseFloat(match[0]);
+  if (isNaN(bytes) || bytes === 0) return '--';
+
+  // 如果字符串中包含单位，直接返回
+  if (/[KMGT]B/i.test(sizeStr)) return sizeStr;
+
+  // 否则按字节数格式化
+  if (bytes < 1024) return bytes.toFixed(0) + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
 
-// 格式化文件大小
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+// 格式化帧率
+function formatFrameRate(metadata: any): string {
+  if (!metadata || !metadata.frameRate) return '--';
+  const fps = parseFloat(metadata.frameRate);
+  if (isNaN(fps)) return '--';
+  return `${fps} fps`;
+}
+
+// 格式化码率
+function formatBitrate(metadata: any): string {
+  if (!metadata || !metadata.bitrate) return '--';
+  const bitrate = parseFloat(metadata.bitrate);
+  if (isNaN(bitrate)) return '--';
+
+  // 如果已经是格式化的字符串，直接返回
+  if (typeof metadata.bitrate === 'string' && /[KM]bps/i.test(metadata.bitrate)) {
+    return metadata.bitrate;
+  }
+
+  // 按 bps 格式化
+  if (bitrate < 1000) return `${bitrate.toFixed(0)} bps`;
+  if (bitrate < 1000000) return `${(bitrate / 1000).toFixed(0)} Kbps`;
+  return `${(bitrate / 1000000).toFixed(1)} Mbps`;
+}
+
+// 格式化创建时间
+function formatCreatedTime(metadata: any): string {
+  if (!metadata || !metadata.createdTime) return '--';
+
+  try {
+    const date = new Date(metadata.createdTime);
+    if (isNaN(date.getTime())) return '--';
+
+    // 格式化为 YYYY-MM-DD HH:mm
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch {
+    return '--';
+  }
 }
 </script>
 
@@ -322,32 +419,57 @@ function formatFileSize(bytes: number): string {
 .properties-section {
   display: flex;
   flex-direction: column;
+  gap: var(--vt-space-4);
+}
+
+/* 文件头部（文件名 + 路径） */
+.file-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vt-text);
+  line-height: 1.4;
+}
+
+.file-path {
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+  opacity: 0.7;
+}
+
+/* 分割线 */
+.divider {
+  border-top: 1px solid var(--vt-border);
+  margin: var(--vt-space-2) 0;
+}
+
+/* 规格列表 */
+.specs-list {
+  display: flex;
+  flex-direction: column;
   gap: var(--vt-space-3);
 }
 
-.section-title {
-  font-size: 14px;
-  margin-bottom: var(--vt-space-2);
-}
-
-.info-row {
+.spec-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: var(--vt-space-2) 0;
-  font-size: 14px;
-  gap: var(--vt-space-3);
+  align-items: center;
+  font-size: 13px;
 }
 
-.info-label {
-  font-size: 13px;
+.spec-label {
   flex-shrink: 0;
 }
 
-.info-value {
+.spec-value {
   font-weight: 500;
   text-align: right;
-  word-break: break-all;
 }
 
 /* 空状态 */
