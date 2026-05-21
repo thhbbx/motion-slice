@@ -24,50 +24,14 @@
     </main>
 
     <!-- 右侧 Inspector -->
-    <aside class="inspector">
-      <div class="vt-panel inspector-panel">
-        <div class="panel-header">
-          <h2 class="vt-title">视频信息</h2>
-        </div>
-        <div class="panel-content">
-          <div class="info-row">
-            <span class="info-label vt-secondary">分辨率</span>
-            <span class="info-value">1920 × 1080</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label vt-secondary">时长</span>
-            <span class="info-value vt-timecode">00:02:34</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label vt-secondary">帧率</span>
-            <span class="info-value">30 fps</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label vt-secondary">编码</span>
-            <span class="info-value">H.264</span>
-          </div>
-        </div>
-
-        <div class="panel-header" style="margin-top: var(--vt-space-6);">
-          <h2 class="vt-title">晃动分析</h2>
-        </div>
-        <div class="panel-content">
-          <div class="shake-placeholder vt-secondary">
-            暂无晃动分析数据
-          </div>
-        </div>
-
-        <div class="panel-actions">
-          <button class="vt-button-primary">导出切片</button>
-        </div>
-      </div>
-    </aside>
+    <Inspector />
   </div>
 </template>
 
 <script setup lang="ts">
 import Sidebar from './components/Sidebar.vue';
 import VideoPlayer from './components/VideoPlayer.vue';
+import Inspector from './components/Inspector.vue';
 </script>
 
 <style scoped>
@@ -146,44 +110,5 @@ import VideoPlayer from './components/VideoPlayer.vue';
   background: var(--vt-primary-soft);
   border: 1px solid var(--vt-primary);
   border-radius: var(--vt-radius-sm);
-}
-
-/* Inspector 面板 */
-.inspector-panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: var(--vt-space-4);
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--vt-space-2) 0;
-  font-size: 14px;
-}
-
-.info-label {
-  font-size: 13px;
-}
-
-.info-value {
-  font-weight: 500;
-}
-
-.shake-placeholder {
-  padding: var(--vt-space-4);
-  text-align: center;
-  font-size: 13px;
-}
-
-.panel-actions {
-  margin-top: auto;
-  padding-top: var(--vt-space-4);
-}
-
-.panel-actions button {
-  width: 100%;
 }
 </style>
