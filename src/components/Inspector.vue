@@ -39,13 +39,6 @@
             <div class="file-header">
               <div class="file-name-row">
                 <div class="file-name">{{ activeVideo.name }}</div>
-                <!-- 加载状态指示器 -->
-                <div v-if="isFetchingMetadata" class="loading-indicator">
-                  <svg class="loading-spinner" width="14" height="14">
-                    <use href="#icon-loader"></use>
-                  </svg>
-                  <span class="loading-text vt-muted">读取中...</span>
-                </div>
               </div>
               <!-- 路径（小字号，弱化，自动换行） -->
               <div class="file-path vt-muted">{{ activeVideo.path }}</div>
@@ -58,35 +51,59 @@
             <div class="specs-list">
               <div class="spec-row">
                 <span class="spec-label vt-secondary">文件大小</span>
-                <span class="spec-value">{{ formatFileSize(activeVideo.metadata?.size) }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ formatFileSize(activeVideo.metadata?.size) }}
+                </span>
+                <span v-else class="skeleton-block skeleton-size"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">时长</span>
-                <span class="spec-value vt-timecode">{{ activeVideo.metadata?.duration || '--' }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value vt-timecode">
+                  {{ activeVideo.metadata?.duration || '--' }}
+                </span>
+                <span v-else class="skeleton-block skeleton-duration"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">分辨率</span>
-                <span class="spec-value">{{ activeVideo.metadata?.resolution || '--' }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ activeVideo.metadata?.resolution || '--' }}
+                </span>
+                <span v-else class="skeleton-block skeleton-resolution"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">帧率</span>
-                <span class="spec-value">{{ formatFrameRate(activeVideo.metadata) }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ formatFrameRate(activeVideo.metadata) }}
+                </span>
+                <span v-else class="skeleton-block skeleton-fps"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">视频编码</span>
-                <span class="spec-value">{{ activeVideo.metadata?.videoCodec || '--' }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ activeVideo.metadata?.videoCodec || '--' }}
+                </span>
+                <span v-else class="skeleton-block skeleton-codec"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">音频编码</span>
-                <span class="spec-value">{{ activeVideo.metadata?.audioCodec || '--' }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ activeVideo.metadata?.audioCodec || '--' }}
+                </span>
+                <span v-else class="skeleton-block skeleton-codec"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">码率</span>
-                <span class="spec-value">{{ formatBitrate(activeVideo.metadata) }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ formatBitrate(activeVideo.metadata) }}
+                </span>
+                <span v-else class="skeleton-block skeleton-bitrate"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">创建时间</span>
-                <span class="spec-value">{{ formatCreatedTime(activeVideo.metadata) }}</span>
+                <span v-if="!isFetchingMetadata" class="spec-value">
+                  {{ formatCreatedTime(activeVideo.metadata) }}
+                </span>
+                <span v-else class="skeleton-block skeleton-time"></span>
               </div>
             </div>
           </div>
@@ -460,34 +477,6 @@ function formatCreatedTime(metadata: any): string {
   flex: 1;
 }
 
-/* 加载状态指示器 */
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  gap: var(--vt-space-2);
-  flex-shrink: 0;
-}
-
-.loading-spinner {
-  flex-shrink: 0;
-  color: var(--vt-primary);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loading-text {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .file-path {
   font-size: 12px;
   line-height: 1.4;
@@ -815,4 +804,72 @@ function formatCreatedTime(metadata: any): string {
 .action-button:disabled .button-icon {
   opacity: 0.4;
 }
+
+/* 跨平台融合按钮样式 */
+.action-button-fusion {
+  border-color: var(--vt-macos-blue);
+  color: var(--vt-macos-blue);
+  background: transparent;
+  gap: var(--vt-space-2);
+  transition: all 180ms ease;
+}
+
+.action-button-fusion:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--vt-border-strong);
+}
+
+.action-button-fusion:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Windows 黄色图标 */
+.button-icon-windows {
+  color: var(--vt-windows-yellow);
+  flex-shrink: 0;
+  transition: opacity 180ms ease;
+}
+
+.action-button-fusion:hover:not(:disabled) .button-icon-windows {
+  opacity: 1;
+}
+
+.action-button-fusion:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--vt-border);
+  color: var(--vt-text-disabled);
+}
+
+.action-button-fusion:disabled .button-icon-windows {
+  color: var(--vt-text-disabled);
+  opacity: 0.4;
+}
+
+/* 骨架屏呼吸动效 */
+.skeleton-block {
+  display: inline-block;
+  height: 16px;
+  background: var(--vt-bg-soft);
+  border-radius: var(--vt-radius-sm);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 不同属性的骨架宽度（错落排版） */
+.skeleton-size { width: 70px; }
+.skeleton-duration { width: 60px; }
+.skeleton-resolution { width: 80px; }
+.skeleton-fps { width: 50px; }
+.skeleton-codec { width: 40px; }
+.skeleton-bitrate { width: 60px; }
+.skeleton-time { width: 100px; }
 </style>

@@ -32,6 +32,11 @@
     --vt-info: #4ab7bd;
     --vt-pink: #e65d6e;
 
+    /* 跨平台融合色 */
+    --vt-windows-yellow: rgb(250, 204, 21); /* Windows 文件夹明黄 */
+    --vt-macos-blue: rgb(56, 189, 248); /* macOS 亮蓝 */
+    --vt-macos-blue-soft: rgba(56, 189, 248, 0.1); /* 玻璃质感透明蓝 */
+
     /* --- 2. 空间韵律 (4px/8px Grid System) --- */
     --vt-space-1: 4px;
     --vt-space-2: 8px;
