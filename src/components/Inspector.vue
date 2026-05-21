@@ -46,12 +46,76 @@
           </div>
         </div>
 
-        <!-- 分析 Tab（占位） -->
+        <!-- 分析 Tab -->
         <div v-else-if="activeTab === 'analysis'" class="tab-pane">
-          <div class="empty-state">
+          <div v-if="activeVideo" class="analysis-section">
+            <!-- 分析设置折叠面板 -->
+            <div class="collapsible-panel">
+              <button class="panel-toggle" @click="toggleAnalysisSettings">
+                <span class="toggle-icon">{{ analysisSettingsExpanded ? '▼' : '▶' }}</span>
+                <span class="toggle-label">分析设置</span>
+              </button>
+
+              <div v-if="analysisSettingsExpanded" class="panel-body">
+                <!-- 启用晃动检测 -->
+                <div class="form-row">
+                  <label class="form-label">
+                    <span class="label-text">启用晃动检测</span>
+                    <input type="checkbox" v-model="analysisConfig.enableShakeDetection" class="vt-switch" />
+                  </label>
+                </div>
+
+                <!-- 灵敏度滑块 -->
+                <div class="form-row">
+                  <label class="form-label">
+                    <span class="label-text">灵敏度</span>
+                    <span class="label-value vt-secondary">{{ analysisConfig.sensitivity }}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    v-model.number="analysisConfig.sensitivity"
+                    min="0"
+                    max="100"
+                    step="5"
+                    class="vt-slider"
+                    :disabled="!analysisConfig.enableShakeDetection"
+                  />
+                </div>
+
+                <!-- 最小持续时间 -->
+                <div class="form-row">
+                  <label class="form-label">
+                    <span class="label-text">最小持续时间（秒）</span>
+                    <span class="label-value vt-secondary">{{ analysisConfig.minDuration }}</span>
+                  </label>
+                  <input
+                    type="range"
+                    v-model.number="analysisConfig.minDuration"
+                    min="0.1"
+                    max="5"
+                    step="0.1"
+                    class="vt-slider"
+                    :disabled="!analysisConfig.enableShakeDetection"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- 分析结果列表 -->
+            <div class="analysis-results">
+              <h3 class="section-title vt-title">检测结果</h3>
+              <div class="result-list">
+                <div class="empty-state-inline">
+                  <span class="vt-muted">暂无分析结果</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="empty-state">
             <div class="empty-icon">🔍</div>
             <div class="empty-text vt-secondary">晃动分析</div>
-            <div class="empty-hint vt-muted">功能开发中</div>
+            <div class="empty-hint vt-muted">选择视频后开始分析</div>
           </div>
         </div>
 
@@ -90,6 +154,20 @@ const tabs = [
   { id: 'analysis', label: '分析' },
   { id: 'export', label: '导出' },
 ] as const;
+
+// 分析设置折叠状态
+const analysisSettingsExpanded = ref(true);
+
+// 分析配置
+const analysisConfig = ref({
+  enableShakeDetection: true,
+  sensitivity: 50,
+  minDuration: 0.5,
+});
+
+function toggleAnalysisSettings() {
+  analysisSettingsExpanded.value = !analysisSettingsExpanded.value;
+}
 
 // 截断路径显示
 function truncatePath(path: string): string {
@@ -244,5 +322,169 @@ function formatFileSize(bytes: number): string {
 .inspector-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* 折叠面板 */
+.collapsible-panel {
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+  overflow: hidden;
+}
+
+.panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3);
+  border: none;
+  background: var(--vt-bg-soft);
+  color: var(--vt-text-regular);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.panel-toggle:hover {
+  background: var(--vt-bg-elevated);
+}
+
+.toggle-icon {
+  font-size: 10px;
+  color: var(--vt-text-secondary);
+}
+
+.toggle-label {
+  flex: 1;
+  text-align: left;
+}
+
+.panel-body {
+  padding: var(--vt-space-4);
+  background: var(--vt-bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-4);
+}
+
+/* 表单行 */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.form-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.label-text {
+  color: var(--vt-text-regular);
+  font-weight: 500;
+}
+
+.label-value {
+  font-size: 12px;
+}
+
+/* Switch 开关 */
+.vt-switch {
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  background: var(--vt-bg-soft);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-full);
+  cursor: pointer;
+  position: relative;
+  transition: all 180ms ease;
+}
+
+.vt-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--vt-text-secondary);
+  border-radius: 50%;
+  transition: all 180ms ease;
+}
+
+.vt-switch:checked {
+  background: var(--vt-primary);
+  border-color: var(--vt-primary);
+}
+
+.vt-switch:checked::before {
+  left: 22px;
+  background: var(--vt-text);
+}
+
+/* Slider 滑块 */
+.vt-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: var(--vt-bg-soft);
+  border-radius: var(--vt-radius-full);
+  outline: none;
+  cursor: pointer;
+}
+
+.vt-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--vt-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.vt-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px var(--vt-primary-glow);
+}
+
+.vt-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vt-slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+/* 分析结果区域 */
+.analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-4);
+}
+
+.analysis-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-3);
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.empty-state-inline {
+  padding: var(--vt-space-4);
+  text-align: center;
+  font-size: 13px;
+  border: 1px dashed var(--vt-border);
+  border-radius: var(--vt-radius-md);
 }
 </style>
