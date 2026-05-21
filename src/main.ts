@@ -15,6 +15,7 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false, // 允许加载本地视频文件
     },
   });
 
