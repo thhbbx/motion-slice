@@ -115,76 +115,23 @@
           </div>
         </div>
 
-        <!-- 分析 Tab -->
-        <div v-else-if="activeTab === 'analysis'" class="tab-pane">
-          <div v-if="activeVideo" class="analysis-section">
-            <!-- 分析设置折叠面板 -->
-            <div class="collapsible-panel">
-              <button class="panel-toggle" @click="toggleAnalysisSettings">
-                <span class="toggle-icon">{{ analysisSettingsExpanded ? '▼' : '▶' }}</span>
-                <span class="toggle-label">分析设置</span>
-              </button>
-
-              <div v-if="analysisSettingsExpanded" class="panel-body">
-                <!-- 启用晃动检测 -->
-                <div class="form-row">
-                  <label class="form-label">
-                    <span class="label-text">启用晃动检测</span>
-                    <input type="checkbox" v-model="analysisConfig.enableShakeDetection" class="vt-switch" />
-                  </label>
-                </div>
-
-                <!-- 灵敏度滑块 -->
-                <div class="form-row">
-                  <label class="form-label">
-                    <span class="label-text">灵敏度</span>
-                    <span class="label-value vt-secondary">{{ analysisConfig.sensitivity }}%</span>
-                  </label>
-                  <input
-                    type="range"
-                    v-model.number="analysisConfig.sensitivity"
-                    min="0"
-                    max="100"
-                    step="5"
-                    class="vt-slider"
-                    :disabled="!analysisConfig.enableShakeDetection"
-                  />
-                </div>
-
-                <!-- 最小持续时间 -->
-                <div class="form-row">
-                  <label class="form-label">
-                    <span class="label-text">最小持续时间（秒）</span>
-                    <span class="label-value vt-secondary">{{ analysisConfig.minDuration }}</span>
-                  </label>
-                  <input
-                    type="range"
-                    v-model.number="analysisConfig.minDuration"
-                    min="0.1"
-                    max="5"
-                    step="0.1"
-                    class="vt-slider"
-                    :disabled="!analysisConfig.enableShakeDetection"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- 分析结果列表 -->
-            <div class="analysis-results">
-              <h3 class="section-title vt-title">检测结果</h3>
-              <div class="result-list">
-                <div class="empty-state-inline">
-                  <span class="vt-muted">暂无分析结果</span>
-                </div>
-              </div>
-            </div>
+        <!-- 工作台 Tab -->
+        <div v-else-if="activeTab === 'workbench'" class="tab-pane">
+          <div class="tool-selector">
+            <label class="tool-label">选择工具</label>
+            <select v-model="currentTool" class="tool-select">
+              <option
+                v-for="tool in toolOptions"
+                :key="tool.value"
+                :value="tool.value"
+              >
+                {{ tool.label }}
+              </option>
+            </select>
           </div>
 
-          <div v-else class="empty-state">
-            <div class="empty-icon">🔍</div>
-            <div class="empty-text vt-secondary">晃动分析</div>
-            <div class="empty-hint vt-muted">选择视频后开始分析</div>
+          <div class="tool-container">
+            <component :is="currentTool === 'slicer' ? ToolSlicer : null" />
           </div>
         </div>
 
@@ -274,13 +221,6 @@
           <span>在资源管理器中显示</span>
         </button>
         <button
-          v-else-if="activeTab === 'analysis'"
-          class="vt-button-primary"
-          :disabled="!activeVideo"
-        >
-          开始检测晃动
-        </button>
-        <button
           v-else-if="activeTab === 'export'"
           class="vt-button-primary"
           :disabled="!activeVideo"
@@ -296,17 +236,30 @@
 import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
+import ToolSlicer from './tools/ToolSlicer.vue';
 
 const videoStore = useVideoStore();
 const { activeVideo, isFetchingMetadata } = storeToRefs(videoStore);
 
-const activeTab = ref<'properties' | 'analysis' | 'export'>('properties');
+const activeTab = ref<'properties' | 'workbench' | 'export'>('properties');
 
 const tabs = [
   { id: 'properties', label: '属性' },
-  { id: 'analysis', label: '分析' },
+  { id: 'workbench', label: '工作台' },
   { id: 'export', label: '导出' },
 ] as const;
+
+// 工具选择器
+const currentTool = ref<'slicer'>('slicer');
+const toolOptions = [
+  { value: 'slicer', label: '视频智能切分' }
+];
+
+// 工具选择器
+const currentTool = ref<'slicer'>('slicer');
+const toolOptions = [
+  { value: 'slicer', label: '视频智能切分' }
+];
 
 // 分析设置折叠状态
 const analysisSettingsExpanded = ref(true);
@@ -780,6 +733,35 @@ function formatCreatedTime(metadata: any): string {
   display: flex;
   flex-direction: column;
   gap: var(--vt-space-2);
+}
+
+/* 工具选择器 */
+.tool-selector {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vt-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tool-label {
+  font-size: 13px;
+  color: var(--vt-text-secondary);
+}
+
+.tool-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--vt-border);
+  border-radius: 4px;
+  background: var(--vt-bg-secondary);
+  color: var(--vt-text-primary);
+  font-size: 13px;
+}
+
+.tool-container {
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* 操作按钮图标 */
