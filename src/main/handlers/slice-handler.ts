@@ -115,8 +115,27 @@ export function registerSliceHandler() {
     try {
       const { filePath, mode, targetValue, useSmartSilence, tolerance } = params;
 
+      // 参数验证
+      if (targetValue <= 0) {
+        throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
+      }
+      if (tolerance < 0) {
+        throw new Error(`容差范围不能为负数，当前值: ${tolerance}`);
+      }
+
+      // 文件路径验证
+      if (!filePath || !fs.existsSync(filePath)) {
+        throw new Error('文件路径无效或文件不存在');
+      }
+
       // 获取视频时长
       const videoDuration = await getVideoDuration(filePath);
+
+      // 合理性检查：避免生成过多片段
+      const estimatedCount = Math.ceil(videoDuration / targetValue);
+      if (estimatedCount > 1000) {
+        throw new Error(`目标值过小，将生成 ${estimatedCount} 个片段（最多支持 1000 个）`);
+      }
 
       let segments: VideoSegment[];
 
@@ -124,7 +143,15 @@ export function registerSliceHandler() {
         segments = sliceByDuration(videoDuration, targetValue, useSmartSilence, tolerance);
       } else {
         // 按大小切分需要先获取文件大小
-        const stats = fs.statSync(filePath);
+        let stats;
+        try {
+          stats = fs.statSync(filePath);
+          if (!stats.isFile()) {
+            throw new Error(`路径不是有效的文件: ${filePath}`);
+          }
+        } catch (statError) {
+          throw new Error(`无法读取文件信息: ${statError instanceof Error ? statError.message : String(statError)}`);
+        }
         const fileSizeMB = stats.size / (1024 * 1024);
         segments = sliceBySize(videoDuration, fileSizeMB, targetValue);
       }
