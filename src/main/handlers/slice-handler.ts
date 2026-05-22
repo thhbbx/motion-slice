@@ -56,8 +56,8 @@ async function getVideoDuration(filePath: string): Promise<number> {
 function sliceByDuration(
   videoDuration: number,
   targetDuration: number,
-  useSmartSilence: boolean,
-  tolerance: number
+  _useSmartSilence: boolean,
+  _tolerance: number
 ): VideoSegment[] {
   const segments: VideoSegment[] = [];
   let currentTime = 0;
