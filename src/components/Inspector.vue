@@ -255,32 +255,12 @@ const toolOptions = [
   { value: 'slicer', label: '视频智能切分' }
 ];
 
-// 工具选择器
-const currentTool = ref<'slicer'>('slicer');
-const toolOptions = [
-  { value: 'slicer', label: '视频智能切分' }
-];
-
-// 分析设置折叠状态
-const analysisSettingsExpanded = ref(true);
-
-// 分析配置
-const analysisConfig = ref({
-  enableShakeDetection: true,
-  sensitivity: 50,
-  minDuration: 0.5,
-});
-
 // 导出配置
 const exportConfig = ref({
   format: 'mp4',
   quality: 80,
   outputDir: '',
 });
-
-function toggleAnalysisSettings() {
-  analysisSettingsExpanded.value = !analysisSettingsExpanded.value;
-}
 
 /**
  * 在资源管理器中显示当前视频文件
