@@ -13,9 +13,9 @@
           <label class="radio-option">
             <input
               type="radio"
-              name="sliceMode"
+              name="mode"
               value="duration"
-              v-model="sliceMode"
+              v-model="mode"
               class="radio-input"
             />
             <span class="radio-label">按时长</span>
@@ -23,9 +23,9 @@
           <label class="radio-option">
             <input
               type="radio"
-              name="sliceMode"
+              name="mode"
               value="size"
-              v-model="sliceMode"
+              v-model="mode"
               class="radio-input"
             />
             <span class="radio-label">按大小</span>
@@ -36,14 +36,14 @@
       <!-- 数值输入 -->
       <div class="form-row">
         <label class="form-label">
-          <span class="label-text">{{ sliceMode === 'duration' ? '目标时长（秒）' : '目标大小（MB）' }}</span>
+          <span class="label-text">{{ inputLabel }}</span>
         </label>
         <input
           type="number"
           v-model.number="targetValue"
-          :placeholder="sliceMode === 'duration' ? '例如：60' : '例如：100'"
-          :min="sliceMode === 'duration' ? 1 : 1"
-          :step="sliceMode === 'duration' ? 1 : 10"
+          :placeholder="inputPlaceholder"
+          :min="mode === 'duration' ? 1 : 1"
+          :step="mode === 'duration' ? 1 : 10"
           class="vt-input"
         />
       </div>
@@ -83,8 +83,8 @@
     <div class="slicer-actions">
       <button
         class="vt-button-primary"
-        :disabled="!canGeneratePreview"
-        @click="handleGeneratePreview"
+        :disabled="!canAnalyze"
+        @click="handleAnalyze"
       >
         <span v-if="!isAnalyzing">生成切片预览</span>
         <span v-else class="loading-text">
@@ -118,7 +118,7 @@
           v-for="slice in previewSlices"
           :key="slice.id"
           :class="['slice-item', { active: slice.id === activeSliceId }]"
-          @click="handleSliceClick(slice)"
+          @click="handleSliceClick(slice.id, slice.startTime)"
         >
           <div class="slice-label">{{ slice.label }}</div>
           <div class="slice-time vt-timecode vt-secondary">
@@ -135,7 +135,7 @@ import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useSliceStore } from '../../store/useSliceStore';
-import type { VideoSegment } from '../../types/slice';
+import type { VideoSegment, SliceAnalyzeParams } from '../../types/slice';
 
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
@@ -144,45 +144,51 @@ const { activeVideo } = storeToRefs(videoStore);
 const { previewSlices, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
 
 // 表单状态
-const sliceMode = ref<'duration' | 'size'>('duration');
+const mode = ref<'duration' | 'size'>('duration');
 const targetValue = ref<number>(60);
 const useSmartSilence = ref<boolean>(true);
 const tolerance = ref<number>(3);
 
 // 计算属性：是否可以生成预览
-const canGeneratePreview = computed(() => {
+const canAnalyze = computed(() => {
   return activeVideo.value !== null && !isAnalyzing.value && targetValue.value > 0;
 });
+
+const inputLabel = computed(() => {
+  return mode.value === 'duration' ? '目标时长 (秒)' : '目标大小 (MB)';
+});
+
+const inputPlaceholder = computed(() => {
+  return mode.value === 'duration' ? '60' : '50';
+});
+
+// 方法
+function handleModeChange(newMode: 'duration' | 'size') {
+  mode.value = newMode;
+  targetValue.value = newMode === 'duration' ? 60 : 50;
+}
 
 /**
  * 生成切片预览
  */
-async function handleGeneratePreview() {
+async function handleAnalyze() {
   if (!activeVideo.value || isAnalyzing.value) return;
 
   sliceStore.setAnalyzing(true);
 
   try {
-    // TODO: 调用主进程 IPC 接口进行切片分析
-    // const result = await window.motionSlice.analyzeSlices({
-    //   filePath: activeVideo.value.path,
-    //   mode: sliceMode.value,
-    //   targetValue: targetValue.value,
-    //   useSmartSilence: useSmartSilence.value,
-    //   tolerance: tolerance.value,
-    // });
-    // sliceStore.setPreviewSlices(result.segments);
+    const params: SliceAnalyzeParams = {
+      filePath: activeVideo.value.path,
+      mode: mode.value,
+      targetValue: targetValue.value,
+      useSmartSilence: useSmartSilence.value,
+      tolerance: tolerance.value,
+    };
 
-    // 临时 Mock 数据（待主进程接口实现后删除）
-    const mockSegments: VideoSegment[] = [
-      { id: '1', startTime: 0, endTime: 60, label: '片段 1' },
-      { id: '2', startTime: 60, endTime: 120, label: '片段 2' },
-      { id: '3', startTime: 120, endTime: 180, label: '片段 3' },
-    ];
-    sliceStore.setPreviewSlices(mockSegments);
+    const result = await window.motionSlice.analyzeSlices(params);
+    sliceStore.setPreviewSlices(result.segments);
   } catch (error) {
     console.error('切片分析失败:', error);
-    // TODO: 显示错误提示
   } finally {
     sliceStore.setAnalyzing(false);
   }
@@ -191,9 +197,9 @@ async function handleGeneratePreview() {
 /**
  * 点击切片项：跳转播放器并高亮
  */
-function handleSliceClick(slice: VideoSegment) {
-  sliceStore.setActiveSlice(slice.id);
-  videoStore.setCurrentTime(slice.startTime);
+function handleSliceClick(sliceId: string, startTime: number) {
+  sliceStore.setActiveSlice(sliceId);
+  videoStore.setCurrentTime(startTime);
 }
 
 /**
