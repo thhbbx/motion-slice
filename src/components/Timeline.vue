@@ -652,13 +652,14 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   position: relative;
   height: 32px;
   background: var(--vt-bg-soft);
-  display: flex;
-  align-items: stretch;
 }
 
 .track-label {
-  flex-shrink: 0;
+  position: absolute;
+  left: -52px;
+  top: 0;
   width: 48px;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -668,51 +669,53 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   background: var(--vt-bg-elevated);
   border-right: 1px solid var(--vt-border);
   user-select: none;
+  z-index: 1;
 }
 
 .track-content {
   position: relative;
-  flex: 1;
+  width: 100%;
+  height: 100%;
 }
 
 .slice-block {
   position: absolute;
   top: 0;
   height: 100%;
-  background: var(--vt-primary-soft);
-  border: 1px solid var(--vt-primary);
-  border-radius: var(--vt-radius-sm);
+  background: rgba(88, 101, 242, 0.3);
+  backdrop-filter: blur(4px);
+  border-left: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.16s ease;
   display: flex;
   align-items: center;
-  justify-content: center;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .slice-block:hover {
-  background: var(--vt-primary-alpha);
-  border-color: var(--vt-primary-strong);
+  background: rgba(88, 101, 242, 0.5);
   z-index: 10;
-  box-shadow: 0 0 8px var(--vt-primary-alpha);
 }
 
 .slice-block.active {
-  background: var(--vt-primary);
-  border-width: 2px;
-  border-color: var(--vt-primary-strong);
+  background: rgba(88, 101, 242, 0.7);
+  border-top: 1px solid rgba(139, 92, 246, 0.6);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.6);
   z-index: 20;
-  box-shadow: 0 0 12px var(--vt-primary-alpha);
 }
 
 .slice-block-label {
   font-size: 11px;
-  color: var(--vt-text);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  padding: 0 var(--vt-space-2);
+  padding-left: 6px;
+  text-align: left;
+  width: 100%;
 }
 
 .slice-block.active .slice-block-label {
