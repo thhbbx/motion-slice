@@ -62,9 +62,19 @@
         <!-- 未来实现：晃动检测标记 -->
       </div>
 
-      <!-- 轨道 4：切片输出轨（预留占位） -->
+      <!-- 轨道 4：切片输出轨 -->
       <div class="track track-slices">
-        <!-- 未来实现：切片区间块 -->
+        <div
+          v-for="slice in previewSlices"
+          :key="slice.id"
+          class="slice-block"
+          :class="{ active: slice.id === activeSliceId }"
+          :style="getSliceStyle(slice.startTime, slice.endTime)"
+          :title="`${slice.label}: ${slice.startTime.toFixed(2)}s - ${slice.endTime.toFixed(2)}s`"
+          @click="handleSliceBlockClick(slice.id, slice.startTime)"
+        >
+          <span class="slice-block-label">{{ slice.label }}</span>
+        </div>
       </div>
     </div>
 
@@ -89,10 +99,14 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
+import { useSliceStore } from '../store/useSliceStore';
 import { formatTimecode, formatRulerLabel } from '../utils/timeFormat';
 
 const videoStore = useVideoStore();
 const { currentTime, duration, activeVideo } = storeToRefs(videoStore);
+
+const sliceStore = useSliceStore();
+const { previewSlices, activeSliceId } = storeToRefs(sliceStore);
 
 const tracksContainer = ref<HTMLDivElement | null>(null);
 
@@ -134,6 +148,30 @@ function handleSeek(event: MouseEvent) {
   const seekTime = percentage * duration.value;
 
   videoStore.setCurrentTime(seekTime);
+}
+
+/**
+ * 计算切片在时间轴上的位置和宽度
+ */
+function getSliceStyle(startTime: number, endTime: number) {
+  const videoDuration = videoStore.duration;
+  if (!videoDuration) return { left: '0%', width: '0%' };
+
+  const leftPercent = (startTime / videoDuration) * 100;
+  const widthPercent = ((endTime - startTime) / videoDuration) * 100;
+
+  return {
+    left: `${leftPercent}%`,
+    width: `${widthPercent}%`,
+  };
+}
+
+/**
+ * 点击切片块
+ */
+function handleSliceBlockClick(sliceId: string, startTime: number) {
+  sliceStore.setActiveSlice(sliceId);
+  videoStore.setCurrentTime(startTime);
 }
 
 // 步骤 2：计算主刻度间隔
@@ -602,9 +640,55 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   background: var(--vt-bg-soft);
 }
 
-/* 轨道 4：切片输出轨（预留） */
+/* 轨道 4：切片输出轨 */
 .track-slices {
-  height: 24px;
+  position: relative;
+  height: 32px;
   background: var(--vt-bg-soft);
+}
+
+.slice-block {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--vt-primary-soft);
+  border: 1px solid var(--vt-primary);
+  border-radius: var(--vt-radius-sm);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.slice-block:hover {
+  background: var(--vt-primary-alpha);
+  border-color: var(--vt-primary-strong);
+  z-index: 10;
+  box-shadow: 0 0 8px var(--vt-primary-alpha);
+}
+
+.slice-block.active {
+  background: var(--vt-primary);
+  border-width: 2px;
+  border-color: var(--vt-primary-strong);
+  z-index: 20;
+  box-shadow: 0 0 12px var(--vt-primary-alpha);
+}
+
+.slice-block-label {
+  font-size: 11px;
+  color: var(--vt-text);
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  padding: 0 var(--vt-space-2);
+}
+
+.slice-block.active .slice-block-label {
+  color: white;
+  font-weight: 600;
 }
 </style>
