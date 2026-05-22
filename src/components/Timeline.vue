@@ -64,16 +64,19 @@
 
       <!-- 轨道 4：切片输出轨 -->
       <div class="track track-slices">
-        <div
-          v-for="slice in previewSlices"
-          :key="slice.id"
-          class="slice-block"
-          :class="{ active: slice.id === activeSliceId }"
-          :style="getSliceStyle(slice.startTime, slice.endTime)"
-          :title="`${slice.label}: ${slice.startTime.toFixed(2)}s - ${slice.endTime.toFixed(2)}s`"
-          @click="handleSliceBlockClick(slice.id, slice.startTime)"
-        >
-          <span class="slice-block-label">{{ slice.label }}</span>
+        <div class="track-label">切片</div>
+        <div class="track-content">
+          <div
+            v-for="slice in previewSlices"
+            :key="slice.id"
+            class="slice-block"
+            :class="{ active: slice.id === activeSliceId }"
+            :style="getSliceStyle(slice.startTime, slice.endTime)"
+            :title="`${slice.label}: ${slice.startTime.toFixed(2)}s - ${slice.endTime.toFixed(2)}s`"
+            @click="handleSliceBlockClick(slice.id, slice.startTime)"
+          >
+            <span class="slice-block-label">{{ slice.label }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -155,10 +158,14 @@ function handleSeek(event: MouseEvent) {
  */
 function getSliceStyle(startTime: number, endTime: number) {
   const videoDuration = videoStore.duration;
-  if (!videoDuration) return { left: '0%', width: '0%' };
+  if (!videoDuration || videoDuration <= 0) return { left: '0%', width: '0%' };
 
-  const leftPercent = (startTime / videoDuration) * 100;
-  const widthPercent = ((endTime - startTime) / videoDuration) * 100;
+  // 确保时间值在有效范围内
+  const safeStartTime = Math.max(0, Math.min(startTime, videoDuration));
+  const safeEndTime = Math.max(safeStartTime, Math.min(endTime, videoDuration));
+
+  const leftPercent = (safeStartTime / videoDuration) * 100;
+  const widthPercent = ((safeEndTime - safeStartTime) / videoDuration) * 100;
 
   return {
     left: `${leftPercent}%`,
@@ -645,6 +652,27 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   position: relative;
   height: 32px;
   background: var(--vt-bg-soft);
+  display: flex;
+  align-items: stretch;
+}
+
+.track-label {
+  flex-shrink: 0;
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--vt-muted);
+  background: var(--vt-bg-elevated);
+  border-right: 1px solid var(--vt-border);
+  user-select: none;
+}
+
+.track-content {
+  position: relative;
+  flex: 1;
 }
 
 .slice-block {
