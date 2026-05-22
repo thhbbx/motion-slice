@@ -4,6 +4,7 @@ import started from 'electron-squirrel-startup';
 import { registerDialogHandlers } from './main/handlers/dialog-handler';
 import { registerShellHandlers } from './main/handlers/shell-handler';
 import { registerMetadataHandlers } from './main/handlers/metadata-handler';
+import { registerSliceHandler } from './main/handlers/slice-handler';
 
 // 修复 Windows 控制台 UTF-8 编码问题
 if (process.platform === 'win32') {
@@ -47,6 +48,7 @@ app.on('ready', () => {
   registerDialogHandlers();
   registerShellHandlers();
   registerMetadataHandlers();
+  registerSliceHandler();
   createWindow();
 });
 
