@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { FileNode, VideoMetadata } from './types/file-tree';
+import type { SliceAnalyzeParams, SliceAnalyzeResult } from './types/slice';
 
 // 暴露安全的 API 给渲染进程
 contextBridge.exposeInMainWorld('motionSlice', {
@@ -27,4 +28,24 @@ contextBridge.exposeInMainWorld('motionSlice', {
   getVideoMetadata: (filePath: string): Promise<VideoMetadata> => {
     return ipcRenderer.invoke('video:get-metadata', filePath);
   },
+
+  /**
+   * 分析视频切片
+   * @param params 切片分析参数（文件路径、切分模式、目标值等）
+   * @returns 切片分析结果（片段数组、总数、视频时长）
+   */
+  analyzeSlices: (params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> => {
+    return ipcRenderer.invoke('analyze-video-slices', params);
+  },
 });
+
+declare global {
+  interface Window {
+    motionSlice: {
+      selectMediaFiles: () => Promise<FileNode[]>;
+      showItemInFolder: (filePath: string) => void;
+      getVideoMetadata: (filePath: string) => Promise<VideoMetadata>;
+      analyzeSlices: (params: SliceAnalyzeParams) => Promise<SliceAnalyzeResult>;
+    };
+  }
+}
