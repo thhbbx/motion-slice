@@ -5,6 +5,12 @@ import { registerDialogHandlers } from './main/handlers/dialog-handler';
 import { registerShellHandlers } from './main/handlers/shell-handler';
 import { registerMetadataHandlers } from './main/handlers/metadata-handler';
 
+// 修复 Windows 控制台 UTF-8 编码问题
+if (process.platform === 'win32') {
+  process.stdout.setDefaultEncoding?.('utf8');
+  process.stderr.setDefaultEncoding?.('utf8');
+}
+
 // 处理 Windows 安装/卸载时的快捷方式创建/删除
 if (started) {
   app.quit();

@@ -39,3 +39,32 @@ export function parseTimecode(timecode: string): number {
 
   return 0;
 }
+
+/**
+ * 将秒数格式化为刻度尺标签（智能省略前导零）
+ * 规则：
+ * - 小于 60 秒：返回 "Xs"（如 "5s", "30s"）
+ * - 小于 1 小时：返回 "mm:ss"（如 "01:30", "05:00"）
+ * - 大于等于 1 小时：返回 "H:mm:ss"（如 "1:05:30", "2:00:00"）
+ * @param seconds 秒数
+ * @returns 格式化后的刻度标签
+ */
+export function formatRulerLabel(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return '0s';
+
+  if (seconds < 60) {
+    return `${Math.floor(seconds)}s`;
+  }
+
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+
+  if (h === 0) {
+    // mm:ss 格式
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  // H:mm:ss 格式（小时不补零）
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}

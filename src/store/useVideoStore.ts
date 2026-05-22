@@ -27,12 +27,17 @@ export const useVideoStore = defineStore('video', () => {
       try {
         const deepMetadata = await window.motionSlice.getVideoMetadata(video.path);
 
-        // 合并深层元数据到 activeVideo
+        // 合并深层元数据到 activeVideo（强制触发响应式更新）
         if (activeVideo.value?.id === video.id) {
-          activeVideo.value.metadata = {
-            ...activeVideo.value.metadata,
-            ...deepMetadata,
+          // 创建新对象，确保 Vue 能检测到变化
+          activeVideo.value = {
+            ...activeVideo.value,
+            metadata: {
+              ...activeVideo.value.metadata,
+              ...deepMetadata,
+            },
           };
+
           // 同步 duration 状态，保持一致性
           if (deepMetadata.duration) {
             // deepMetadata.duration 是字符串格式（HH:mm:ss），需要转换为秒数
