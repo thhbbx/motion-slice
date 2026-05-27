@@ -555,13 +555,12 @@ import Timeline from './components/Timeline.vue';
 
 在控制台运行：
 ```bash
-echo "Timeline 核心联动功能验证完成" > verification.log
-echo "- 视频加载与 duration 同步: PASS" >> verification.log
-echo "- 播放器 -> 时间轴联动: PASS" >> verification.log
-echo "- 时间轴 -> 播放器联动: PASS" >> verification.log
-echo "- 边界情况处理: PASS" >> verification.log
-echo "- UI 质感规范: PASS" >> verification.log
-cat verification.log
+echo "Timeline 核心联动功能验证完成"
+echo "- 视频加载与 duration 同步: PASS"
+echo "- 播放器 -> 时间轴联动: PASS"
+echo "- 时间轴 -> 播放器联动: PASS"
+echo "- 边界情况处理: PASS"
+echo "- UI 质感规范: PASS"
 ```
 
 预期：输出验证通过的日志
@@ -663,7 +662,6 @@ cat verification.log
 - `src/components/Timeline.vue` - 时间轴四轨层叠 UI 组件
 - `src/utils/timeFormat.ts` - 时间格式转换工具
 - `docs/bugfix-timeline-duration.md` - Bug 修复文档
-- `verification.log` - 端到端验证日志
 
 **修改：**
 - `src/store/useVideoStore.ts` - 扩展状态管理，添加类型转换
