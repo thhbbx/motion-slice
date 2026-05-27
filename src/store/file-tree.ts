@@ -32,8 +32,10 @@ export const useFileTreeStore = defineStore('fileTree', () => {
 
   // Action：加载文件树
   async function loadFileTree() {
+    console.log('[FileTreeStore] 开始加载文件树');
     try {
       const fileTree = await window.motionSlice.selectMediaFiles();
+      console.log('[FileTreeStore] 收到文件树数据:', fileTree);
       roots.value = fileTree;
 
       // 自动展开所有根节点
@@ -42,8 +44,9 @@ export const useFileTreeStore = defineStore('fileTree', () => {
           expandedDirIds.value.add(node.id);
         }
       });
+      console.log('[FileTreeStore] 文件树加载完成');
     } catch (error) {
-      console.error('加载文件树失败:', error);
+      console.error('[FileTreeStore] 加载文件树失败:', error);
       throw error;
     }
   }

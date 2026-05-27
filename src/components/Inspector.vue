@@ -137,67 +137,7 @@
 
         <!-- 导出 Tab -->
         <div v-else-if="activeTab === 'export'" class="tab-pane">
-          <div v-if="activeVideo" class="export-section">
-            <!-- 导出设置 -->
-            <div class="export-settings">
-              <h3 class="section-title vt-title">导出设置</h3>
-
-              <!-- 输出格式 -->
-              <div class="form-row">
-                <label class="form-label">
-                  <span class="label-text">输出格式</span>
-                </label>
-                <select v-model="exportConfig.format" class="vt-select">
-                  <option value="mp4">MP4</option>
-                  <option value="mov">MOV</option>
-                  <option value="avi">AVI</option>
-                </select>
-              </div>
-
-              <!-- 视频质量 -->
-              <div class="form-row">
-                <label class="form-label">
-                  <span class="label-text">视频质量</span>
-                  <span class="label-value vt-secondary">{{ exportConfig.quality }}%</span>
-                </label>
-                <input
-                  type="range"
-                  v-model.number="exportConfig.quality"
-                  min="10"
-                  max="100"
-                  step="10"
-                  class="vt-slider"
-                />
-              </div>
-
-              <!-- 输出目录 -->
-              <div class="form-row">
-                <label class="form-label">
-                  <span class="label-text">输出目录</span>
-                </label>
-                <div class="path-input-group">
-                  <input
-                    type="text"
-                    v-model="exportConfig.outputDir"
-                    class="vt-input"
-                    readonly
-                    placeholder="选择输出目录"
-                  />
-                  <button class="vt-button-ghost path-button">浏览</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 导出队列 -->
-            <div class="export-queue">
-              <h3 class="section-title vt-title">导出队列</h3>
-              <div class="queue-list">
-                <div class="empty-state-inline">
-                  <span class="vt-muted">暂无导出任务</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ExportTab v-if="activeVideo" />
 
           <div v-else class="empty-state">
             <div class="empty-icon">📦</div>
@@ -220,13 +160,6 @@
           </svg>
           <span>在资源管理器中显示</span>
         </button>
-        <button
-          v-else-if="activeTab === 'export'"
-          class="vt-button-primary"
-          :disabled="!activeVideo"
-        >
-          执行导出
-        </button>
       </div>
     </div>
   </aside>
@@ -237,6 +170,7 @@ import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 import ToolSlicer from './tools/ToolSlicer.vue';
+import ExportTab from './ExportTab.vue';
 
 const videoStore = useVideoStore();
 const { activeVideo, isFetchingMetadata } = storeToRefs(videoStore);
@@ -254,13 +188,6 @@ const currentTool = ref<'slicer'>('slicer');
 const toolOptions = [
   { value: 'slicer', label: '视频智能切分' }
 ];
-
-// 导出配置
-const exportConfig = ref({
-  format: 'mp4',
-  quality: 80,
-  outputDir: '',
-});
 
 /**
  * 在资源管理器中显示当前视频文件
@@ -651,68 +578,6 @@ function formatCreatedTime(metadata: any): string {
   font-size: 13px;
   border: 1px dashed var(--vt-border);
   border-radius: var(--vt-radius-md);
-}
-
-/* 导出设置区域 */
-.export-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vt-space-4);
-}
-
-.export-settings {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vt-space-3);
-}
-
-/* Select 下拉框 */
-.vt-select {
-  width: 100%;
-  height: 40px;
-  padding: 0 var(--vt-space-3);
-  border: 1px solid var(--vt-border);
-  border-radius: var(--vt-radius-sm);
-  background: rgba(26, 26, 30, 0.9);
-  color: var(--vt-text-regular);
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
-}
-
-.vt-select:focus {
-  border-color: var(--vt-border-active);
-  box-shadow: 0 0 0 4px var(--vt-primary-glow);
-}
-
-/* 路径输入组 */
-.path-input-group {
-  display: flex;
-  gap: var(--vt-space-2);
-}
-
-.path-input-group .vt-input {
-  flex: 1;
-}
-
-.path-button {
-  height: 40px;
-  padding: 0 var(--vt-space-3);
-  flex-shrink: 0;
-}
-
-/* 导出队列 */
-.export-queue {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vt-space-3);
-}
-
-.queue-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vt-space-2);
 }
 
 /* 工具选择器 */

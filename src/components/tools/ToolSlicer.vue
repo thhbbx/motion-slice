@@ -135,10 +135,13 @@ import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useSliceStore } from '../../store/useSliceStore';
+import { useExportStore } from '../../store/useExportStore';
 import type { VideoSegment, SliceAnalyzeParams } from '../../types/slice';
+import type { ExportTask } from '../../types/export';
 
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
+const exportStore = useExportStore();
 
 const { activeVideo } = storeToRefs(videoStore);
 const { previewSlices, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
@@ -190,6 +193,31 @@ async function handleAnalyze() {
     console.log('[ToolSlicer] 收到切片分析结果:', result);
     sliceStore.setPreviewSlices(result.segments);
     console.log('[ToolSlicer] 已更新 Store，当前切片数量:', result.segments.length);
+
+    // 推送导出任务到全局导出池
+    const exportTask: ExportTask = {
+      id: `slicer-${activeVideo.value.path.replace(/[^a-zA-Z0-9]/g, '-')}`,
+      toolId: 'slicer',
+      title: '视频切片导出',
+      summary: `按${mode.value === 'duration' ? '时长' : '大小'} ${targetValue.value}${mode.value === 'duration' ? 's' : 'MB'} 切分，共 ${result.segments.length} 个片段${useOverlapHandles.value ? ` | 交叠缓冲 ${overlapDuration.value.toFixed(1)}s` : ''}`,
+      status: 'pending',
+      payload: {
+        sourceFilePath: activeVideo.value.path,
+        segments: result.segments.map(seg => ({
+          id: seg.id,
+          startTime: seg.startTime,
+          endTime: seg.endTime,
+          label: seg.label,
+        })),
+      },
+      createdAt: Date.now(),
+    };
+    try {
+      exportStore.upsertTask(exportTask);
+      console.log('[ToolSlicer] 已推送导出任务到全局池:', exportTask.id);
+    } catch (error) {
+      console.error('[ToolSlicer] 推送导出任务失败:', error);
+    }
   } catch (error) {
     console.error('切片分析失败:', error);
   } finally {
