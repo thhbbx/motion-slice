@@ -5,6 +5,7 @@ import { registerDialogHandlers } from './main/handlers/dialog-handler';
 import { registerShellHandlers } from './main/handlers/shell-handler';
 import { registerMetadataHandlers } from './main/handlers/metadata-handler';
 import { registerSliceHandler } from './main/handlers/slice-handler';
+import { registerExportHandler } from './main/handlers/export-handler';
 
 // 修复 Windows 控制台 UTF-8 编码问题
 if (process.platform === 'win32') {
@@ -39,6 +40,9 @@ const createWindow = () => {
 
   // 打开开发者工具
   mainWindow.webContents.openDevTools();
+
+  // 注册导出 Handler
+  registerExportHandler(mainWindow);
 };
 
 // 当 Electron 完成初始化并准备创建浏览器窗口时调用此方法
