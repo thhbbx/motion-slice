@@ -4,12 +4,16 @@
 export interface VideoSegment {
   /** 唯一标识符 */
   id: string;
-  /** 精确切片起始时间（秒，保留 2 位小数） */
+  /** 精确切片起始时间（秒，保留 2 位小数，已应用头部缓冲扩张） */
   startTime: number;
-  /** 精确切片结束时间（秒，保留 2 位小数） */
+  /** 精确切片结束时间（秒，保留 2 位小数，已应用尾部缓冲扩张） */
   endTime: number;
   /** UI 展示标签，如 "片段 1" */
   label: string;
+  /** 头部缓冲实际扩张时长（秒），用于渲染左侧斜纹区域 */
+  headBuffer: number;
+  /** 尾部缓冲实际扩张时长（秒），用于渲染右侧斜纹区域 */
+  tailBuffer: number;
 }
 
 /**
@@ -22,10 +26,10 @@ export interface SliceAnalyzeParams {
   mode: 'duration' | 'size';
   /** 目标值（秒 或 MB） */
   targetValue: number;
-  /** 是否开启智能断句微调 */
-  useSmartSilence: boolean;
-  /** 容差范围（秒） */
-  tolerance: number;
+  /** 是否开启交叠缓冲 (Overlap Handles) */
+  useOverlapHandles: boolean;
+  /** 交叠缓冲时长（秒，范围 0.0 - 5.0） */
+  overlapDuration: number;
 }
 
 /**

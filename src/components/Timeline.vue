@@ -13,69 +13,114 @@
       class="timeline-tracks-container"
       @click="handleSeek"
     >
-      <!-- 播放指针 -->
-      <div class="playhead" :style="{ left: playheadPosition }">
-        <div class="playhead-handle"></div>
-        <div class="playhead-line"></div>
-      </div>
-
-      <!-- 轨道 1：刻度尺轨 -->
-      <div class="track track-ruler">
-        <div
-          v-for="tick in timelineTicks"
-          :key="tick.time"
-          class="ruler-tick"
-          :class="{ 'ruler-tick-major': tick.isMajor }"
-          :style="{ left: `${tick.position}%` }"
-        >
-          <div class="ruler-tick-line"></div>
-          <span v-if="tick.isMajor" class="ruler-tick-label">{{ tick.label }}</span>
+      <!-- 播放指针遮罩层：独立层级，避开表头 -->
+      <div class="playhead-overlay">
+        <div class="track-canvas">
+          <div class="playhead" :style="{ left: playheadPosition }">
+            <div class="playhead-handle"></div>
+            <div class="playhead-line"></div>
+          </div>
         </div>
       </div>
 
-      <!-- 轨道 2：缩略图主轨 -->
-      <div class="track track-filmstrip" :class="{ 'filmstrip-loading': isThumbnailsLoading }">
-        <!-- 动态进度反馈 -->
-        <div v-if="isThumbnailsLoading" class="filmstrip-progress-overlay">
-          <span class="progress-text">正在提取视频帧... {{ thumbProgress }}%</span>
+      <!-- 轨道容器：使用 flex column + gap 分隔 -->
+      <div class="tracks-wrapper">
+        <!-- 轨道 1：刻度尺轨 -->
+        <div class="track track-ruler">
+          <div class="track-header">时间</div>
+          <div class="track-content">
+            <div class="track-canvas">
+              <div
+                v-for="(tick, index) in timelineTicks"
+                :key="tick.time"
+                class="ruler-tick"
+                :class="{
+                  'ruler-tick-major': tick.isMajor,
+                  'ruler-tick-first': index === 0,
+                  'ruler-tick-last': index === timelineTicks.length - 1
+                }"
+                :style="{ left: `${tick.position}%` }"
+              >
+                <div class="ruler-tick-line"></div>
+                <span v-if="tick.isMajor" class="ruler-tick-label">{{ tick.label }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- 缩略图带（渐进式渲染） -->
-        <div v-if="thumbnails.length > 0" class="filmstrip-images">
-          <img
-            v-for="(thumb, index) in thumbnails"
-            :key="index"
-            :src="thumb"
-            class="filmstrip-frame"
-            alt="Video thumbnail"
-          />
+        <!-- 轨道 2：缩略图主轨 -->
+        <div class="track track-filmstrip" :class="{ 'filmstrip-loading': isThumbnailsLoading }">
+          <div class="track-header">视频</div>
+          <div class="track-content">
+            <div class="track-canvas">
+              <!-- 动态进度反馈 -->
+              <div v-if="isThumbnailsLoading" class="filmstrip-progress-overlay">
+                <span class="progress-text">正在提取视频帧... {{ thumbProgress }}%</span>
+              </div>
+
+              <!-- 缩略图带（渐进式渲染） -->
+              <div v-if="thumbnails.length > 0" class="filmstrip-images">
+                <img
+                  v-for="(thumb, index) in thumbnails"
+                  :key="index"
+                  :src="thumb"
+                  class="filmstrip-frame"
+                  alt="Video thumbnail"
+                />
+              </div>
+
+              <!-- 空状态 -->
+              <span v-if="!isThumbnailsLoading && thumbnails.length === 0" class="track-placeholder vt-muted">
+                未加载视频
+              </span>
+            </div>
+          </div>
         </div>
 
-        <!-- 空状态 -->
-        <span v-if="!isThumbnailsLoading && thumbnails.length === 0" class="track-placeholder vt-muted">
-          未加载视频
-        </span>
-      </div>
+        <!-- 轨道 3：分析标记轨（预留占位） -->
+        <div class="track track-analysis">
+          <div class="track-header">分析</div>
+          <div class="track-content">
+            <div class="track-canvas">
+              <!-- 未来实现：晃动检测标记 -->
+            </div>
+          </div>
+        </div>
 
-      <!-- 轨道 3：分析标记轨（预留占位） -->
-      <div class="track track-analysis">
-        <!-- 未来实现：晃动检测标记 -->
-      </div>
+        <!-- 轨道 4：切片输出轨 -->
+        <div class="track track-slices">
+          <div class="track-header">切片</div>
+          <div class="track-content">
+            <div class="track-canvas">
+              <div
+                v-for="(slice, index) in previewSlices"
+                :key="slice.id"
+                class="slice-block"
+                :class="{ active: slice.id === activeSliceId }"
+                :style="getSliceStyle(slice.startTime, slice.endTime)"
+                :title="`${slice.label}: ${slice.startTime.toFixed(2)}s - ${slice.endTime.toFixed(2)}s`"
+                @click="handleSliceBlockClick(slice.id, slice.startTime)"
+              >
+                <!-- 左侧头部缓冲带（斜纹区域） -->
+                <div
+                  v-if="slice.headBuffer > 0"
+                  class="slice-overlap-handle slice-overlap-left"
+                  :style="getBufferHandleStyle(slice, 'head')"
+                ></div>
 
-      <!-- 轨道 4：切片输出轨 -->
-      <div class="track track-slices">
-        <div class="track-label">切片</div>
-        <div class="track-content">
-          <div
-            v-for="slice in previewSlices"
-            :key="slice.id"
-            class="slice-block"
-            :class="{ active: slice.id === activeSliceId }"
-            :style="getSliceStyle(slice.startTime, slice.endTime)"
-            :title="`${slice.label}: ${slice.startTime.toFixed(2)}s - ${slice.endTime.toFixed(2)}s`"
-            @click="handleSliceBlockClick(slice.id, slice.startTime)"
-          >
-            <span class="slice-block-label">{{ slice.label }}</span>
+                <!-- 切片主体（纯色区域） -->
+                <div class="slice-body" :style="getBodyStyle(slice)">
+                  <span class="slice-block-label">{{ slice.label }}</span>
+                </div>
+
+                <!-- 右侧尾部缓冲带（斜纹区域） -->
+                <div
+                  v-if="slice.tailBuffer > 0"
+                  class="slice-overlap-handle slice-overlap-right"
+                  :style="getBufferHandleStyle(slice, 'tail')"
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -104,12 +149,18 @@ import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 import { useSliceStore } from '../store/useSliceStore';
 import { formatTimecode, formatRulerLabel } from '../utils/timeFormat';
+import { getPlayheadPosition, getSeekRatio } from '../utils/timelineGeometry';
 
 const videoStore = useVideoStore();
 const { currentTime, duration, activeVideo } = storeToRefs(videoStore);
 
 const sliceStore = useSliceStore();
 const { previewSlices, activeSliceId } = storeToRefs(sliceStore);
+
+// 调试：监控切片数据变化
+watch(previewSlices, (newSlices) => {
+  console.log('[Timeline] previewSlices 更新:', newSlices.length, newSlices);
+}, { immediate: true, deep: true });
 
 const tracksContainer = ref<HTMLDivElement | null>(null);
 
@@ -136,9 +187,7 @@ const formattedDuration = computed(() => formatTimecode(duration.value));
 
 // 计算属性：播放指针位置（百分比）
 const playheadPosition = computed(() => {
-  if (duration.value === 0) return '0%';
-  const percentage = (currentTime.value / duration.value) * 100;
-  return `${Math.min(100, Math.max(0, percentage))}%`;
+  return getPlayheadPosition(currentTime.value, duration.value);
 });
 
 // 点击时间轴定位
@@ -146,10 +195,18 @@ function handleSeek(event: MouseEvent) {
   if (!tracksContainer.value || duration.value === 0) return;
 
   const rect = tracksContainer.value.getBoundingClientRect();
-  const offsetX = event.clientX - rect.left;
-  const percentage = offsetX / rect.width;
-  const seekTime = percentage * duration.value;
 
+  // 注意：rect.left / rect.width 包含 border，
+  // 但 CSS 里的 absolute 定位和内容布局更接近 client 区域，
+  // 所以这里减掉 clientLeft，并使用 clientWidth，避免 1px 边框导致坐标偏移。
+  const offsetX = event.clientX - rect.left - tracksContainer.value.clientLeft;
+  const containerWidth = tracksContainer.value.clientWidth;
+
+  const percentage = getSeekRatio(offsetX, containerWidth);
+
+  if (percentage === null) return;
+
+  const seekTime = percentage * duration.value;
   videoStore.setCurrentTime(seekTime);
 }
 
@@ -164,13 +221,18 @@ function getSliceStyle(startTime: number, endTime: number) {
   const safeStartTime = Math.max(0, Math.min(startTime, videoDuration));
   const safeEndTime = Math.max(safeStartTime, Math.min(endTime, videoDuration));
 
+  // 使用原始百分比（0-100%）
   const leftPercent = (safeStartTime / videoDuration) * 100;
   const widthPercent = ((safeEndTime - safeStartTime) / videoDuration) * 100;
 
-  return {
+  const style = {
     left: `${leftPercent}%`,
     width: `${widthPercent}%`,
   };
+
+  console.log('[Timeline] 切片样式计算:', { startTime, endTime, videoDuration, style });
+
+  return style;
 }
 
 /**
@@ -179,6 +241,36 @@ function getSliceStyle(startTime: number, endTime: number) {
 function handleSliceBlockClick(sliceId: string, startTime: number) {
   sliceStore.setActiveSlice(sliceId);
   videoStore.setCurrentTime(startTime);
+}
+
+/**
+ * 计算缓冲带的样式（头部或尾部斜纹区域）
+ */
+function getBufferHandleStyle(slice: any, side: 'head' | 'tail'): any {
+  const totalDuration = slice.endTime - slice.startTime;
+  if (totalDuration <= 0) return { width: '0%' };
+
+  const bufferDuration = side === 'head' ? slice.headBuffer : slice.tailBuffer;
+  const bufferPercent = (bufferDuration / totalDuration) * 100;
+
+  return {
+    width: `${bufferPercent.toFixed(2)}%`
+  };
+}
+
+/**
+ * 计算切片主体的样式（中间纯色区域）
+ */
+function getBodyStyle(slice: any): any {
+  const totalDuration = slice.endTime - slice.startTime;
+  if (totalDuration <= 0) return { width: '100%' };
+
+  const bodyDuration = totalDuration - slice.headBuffer - slice.tailBuffer;
+  const bodyPercent = (bodyDuration / totalDuration) * 100;
+
+  return {
+    width: `${bodyPercent.toFixed(2)}%`
+  };
 }
 
 // 步骤 2：计算主刻度间隔
@@ -212,9 +304,14 @@ const timelineTicks = computed<TimelineTick[]>(() => {
     if (currentTime > duration.value) break;
 
     const isMajor = Math.abs(currentTime % majorInterval) < 0.001;
+
+    // 使用原始百分比（0-100%）
+    // 刻度通过 CSS 的 left 定位，会自动受到 .filmstrip-images 的 left: 16px 影响
+    const position = (currentTime / duration.value) * 100;
+
     ticks.push({
       time: currentTime,
-      position: (currentTime / duration.value) * 100,
+      position,
       isMajor,
       label: isMajor ? formatRulerLabel(currentTime) : '',
     });
@@ -453,6 +550,10 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   flex-direction: column;
   gap: var(--vt-space-3);
   height: 100%;
+  overflow: hidden;
+
+  --timeline-header-width: 60px;
+  --timeline-content-padding: 16px;
 }
 
 /* 时间轴头部 */
@@ -470,12 +571,53 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   cursor: pointer;
   background: var(--vt-bg-soft);
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-md);
+  box-sizing: border-box;
+}
+
+/* 自定义暗黑滚动条 - 使用通配符覆盖所有滚动条 */
+.timeline-container *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.timeline-container *::-webkit-scrollbar-track {
+  background: #121212;
+}
+
+.timeline-container *::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+.timeline-container *::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 轨道容器：移除 gap，使用 border-bottom 分隔 */
+.tracks-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* 播放指针遮罩层：独立层级，避开表头，与轨道 padding 对齐 */
+.playhead-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--timeline-header-width); /* 避开左侧轨道表头的宽度 */
+  right: 0;
+  padding: 0 var(--timeline-content-padding); /* 与 .track-content 保持绝对一致的安全边距 */
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 100; /* 悬浮在所有轨道最上层 */
 }
 
 /* 播放指针 */
@@ -483,8 +625,7 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   position: absolute;
   top: 0;
   height: 100%;
-  width: 2px;
-  z-index: 50;
+  width: 0;
   pointer-events: none;
 }
 
@@ -503,29 +644,73 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 .playhead-line {
   position: absolute;
   top: 8px;
-  left: 0;
+  left: -1px;
   width: 2px;
   height: calc(100% - 8px);
   background: var(--vt-danger);
 }
 
-/* 轨道通用样式 */
+/* 轨道通用样式：无缝贴合 */
 .track {
+  position: relative;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid var(--vt-border);
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .track:last-child {
   border-bottom: none;
 }
 
+/* 轨道表头（Sticky 粘性定位） */
+.track-header {
+  width: var(--timeline-header-width);
+  flex: 0 0 var(--timeline-header-width);
+  box-sizing: border-box;
+  position: sticky;
+  left: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  padding-left: var(--vt-space-3);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--vt-text-muted);
+  background: #1a1a1c;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  user-select: none;
+}
+
+/* 轨道内容区（统一画布坐标系） */
+.track-content {
+  flex: 1;
+  position: relative;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0 var(--timeline-content-padding); /* 统一的左右安全边距，所有轨道共享 */
+  min-width: 0;
+}
+
+/* 统一的安全画布层 */
+.track-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box; /* 确保缩略图等子元素能铺满 */
+}
+
 /* 轨道 1：刻度尺轨 */
 .track-ruler {
-  position: relative;
-  height: 24px;
+  height: 28px;
+}
+
+.track-ruler .track-content {
   background: var(--vt-bg-elevated);
 }
 
@@ -542,40 +727,57 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 .ruler-tick-line {
   width: 1px;
   background: var(--vt-border);
+  /* 刻度线居中对齐：向左偏移 0.5px，确保 1px 线条的中心在 left 位置 */
+  margin-left: -0.5px;
 }
 
-/* 次刻度：短线 */
+/* 次刻度：短线（统一从顶部开始，无 margin） */
 .ruler-tick:not(.ruler-tick-major) .ruler-tick-line {
-  height: 4px;
-  margin-top: 4px;
+  height: 6px;
   opacity: 0.4;
 }
 
-/* 主刻度：长线 + 标签 */
+/* 主刻度：长线 + 标签（统一从顶部开始） */
 .ruler-tick-major .ruler-tick-line {
-  height: 8px;
+  height: 10px;
   background: var(--vt-border-strong);
 }
 
+.ruler-tick-first .ruler-tick-label {
+  left: 0;
+  transform: translateX(0);
+}
+
+.ruler-tick-last .ruler-tick-label {
+  left: 0;
+  transform: translateX(-100%);
+}
+
 .ruler-tick-label {
+  position: absolute;
+  top: 12px;
+  left: 0;
   margin-top: 2px;
   font-size: 10px;
   font-family: var(--vt-font-mono);
   color: var(--vt-muted);
   white-space: nowrap;
+  text-align: center;
   user-select: none;
+  transform: translateX(-50%);
 }
 
 /* 轨道 2：缩略图主轨 */
 .track-filmstrip {
-  position: relative;
-  height: 60px;
+  height: 64px;
+}
+
+.track-filmstrip .track-content {
   background: var(--vt-bg);
-  overflow: hidden;
 }
 
 /* 加载中的 Shimmer 扫光动画 */
-.filmstrip-loading {
+.filmstrip-loading .track-content {
   background: linear-gradient(
     90deg,
     var(--vt-bg) 0%,
@@ -625,15 +827,18 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 
 /* 任务 4-6：缩略图带样式 */
 .filmstrip-images {
+  position: absolute;
+  inset: 0;
   display: flex;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .filmstrip-frame {
   flex: 1;
   height: 100%;
   object-fit: cover;
+  box-sizing: border-box;
   border-right: 1px solid var(--vt-border);
 }
 
@@ -641,69 +846,187 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   border-right: none;
 }
 
-/* 轨道 3：分析标记轨（预留） */
-.track-analysis {
-  height: 24px;
-  background: var(--vt-bg-soft);
-}
-
-/* 轨道 4：切片输出轨 */
-.track-slices {
-  position: relative;
-  height: 32px;
-  background: var(--vt-bg-soft);
-}
-
-.track-label {
+/* 进度覆盖层覆盖缩略图区域 */
+.filmstrip-progress-overlay {
   position: absolute;
-  left: -52px;
   top: 0;
-  width: 48px;
-  height: 100%;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--vt-muted);
-  background: var(--vt-bg-elevated);
-  border-right: 1px solid var(--vt-border);
-  user-select: none;
-  z-index: 1;
+  z-index: 10;
+  pointer-events: none;
 }
 
-.track-content {
-  position: relative;
-  width: 100%;
-  height: 100%;
+.track-placeholder {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 轨道 3：分析标记轨（弹性高度） */
+.track-analysis {
+  flex: 1;
+}
+
+.track-analysis .track-content {
+  background: var(--vt-bg-soft);
+}
+
+/* 轨道 4：切片输出轨（弹性高度） */
+.track-slices {
+  flex: 1;
+}
+
+.track-slices .track-content {
+  background: var(--vt-bg-soft);
 }
 
 .slice-block {
   position: absolute;
   top: 0;
   height: 100%;
-  background: rgba(88, 101, 242, 0.3);
-  backdrop-filter: blur(4px);
-  border-left: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 2px;
+  display: flex;
   cursor: pointer;
   transition: all 0.16s ease;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
   box-sizing: border-box;
+  z-index: 1;
 }
 
 .slice-block:hover {
-  background: rgba(88, 101, 242, 0.5);
   z-index: 10;
 }
 
 .slice-block.active {
-  background: rgba(88, 101, 242, 0.7);
-  border-top: 1px solid rgba(139, 92, 246, 0.6);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.6);
   z-index: 20;
+}
+
+/* 切片主体区域 */
+.slice-body {
+  height: 100%;
+  background: rgba(88, 101, 242, 0.4);
+  backdrop-filter: blur(4px);
+  border-top: 1px solid rgba(139, 92, 246, 0.3);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: all 0.16s ease;
+  box-sizing: border-box;
+}
+
+.slice-block:hover .slice-body {
+  background: rgba(88, 101, 242, 0.55);
+  border-top-color: rgba(139, 92, 246, 0.5);
+  border-bottom-color: rgba(139, 92, 246, 0.5);
+}
+
+.slice-block.active .slice-body {
+  background: rgba(88, 101, 242, 0.7);
+  border-top: 1px solid rgba(139, 92, 246, 0.8);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.8);
+}
+
+/* 交叠缓冲带：通用样式 */
+.slice-overlap-handle {
+  height: 100%;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* 左侧头部缓冲带（斜纹区域） */
+.slice-overlap-left {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.25) 0px,
+      rgba(139, 92, 246, 0.25) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.15);
+  border-left: 2px solid rgba(139, 92, 246, 0.9);
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 2px 0 0 2px;
+}
+
+.slice-block:hover .slice-overlap-left {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.4) 0px,
+      rgba(139, 92, 246, 0.4) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.25);
+  border-left-color: rgba(139, 92, 246, 1);
+}
+
+.slice-block.active .slice-overlap-left {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.6) 0px,
+      rgba(139, 92, 246, 0.6) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.35);
+  border-left-color: rgba(139, 92, 246, 1);
+  border-top-color: rgba(139, 92, 246, 0.4);
+  border-bottom-color: rgba(139, 92, 246, 0.4);
+}
+
+/* 右侧尾部缓冲带（斜纹区域） */
+.slice-overlap-right {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.25) 0px,
+      rgba(139, 92, 246, 0.25) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.15);
+  border-right: 2px solid rgba(139, 92, 246, 0.9);
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0 2px 2px 0;
+}
+
+.slice-block:hover .slice-overlap-right {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.4) 0px,
+      rgba(139, 92, 246, 0.4) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.25);
+  border-right-color: rgba(139, 92, 246, 1);
+}
+
+.slice-block.active .slice-overlap-right {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.6) 0px,
+      rgba(139, 92, 246, 0.6) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.35);
+  border-right-color: rgba(139, 92, 246, 1);
+  border-top-color: rgba(139, 92, 246, 0.4);
+  border-bottom-color: rgba(139, 92, 246, 0.4);
 }
 
 .slice-block-label {

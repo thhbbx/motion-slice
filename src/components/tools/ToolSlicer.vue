@@ -48,34 +48,34 @@
         />
       </div>
 
-      <!-- 智能断句开关 -->
+      <!-- 交叠缓冲开关 -->
       <div class="form-row">
         <label class="form-label">
-          <span class="label-text">智能断句</span>
+          <span class="label-text">开启交叠缓冲</span>
           <input
             type="checkbox"
-            v-model="useSmartSilence"
+            v-model="useOverlapHandles"
             class="vt-switch"
           />
         </label>
-        <div class="form-hint vt-muted">在静音处切分，避免打断对话</div>
+        <div class="form-hint vt-muted">在切口两端延伸冗余时间，便于后期转场</div>
       </div>
 
-      <!-- 容差范围输入（仅在智能断句开启时显示） -->
-      <div v-if="useSmartSilence" class="form-row">
+      <!-- 缓冲时长滑块（仅在交叠缓冲开启时显示） -->
+      <div v-if="useOverlapHandles" class="form-row">
         <label class="form-label">
-          <span class="label-text">容差范围（秒）</span>
-          <span class="label-value vt-secondary">{{ tolerance }}</span>
+          <span class="label-text">缓冲时长（秒）</span>
+          <span class="label-value vt-secondary">{{ overlapDuration.toFixed(1) }}</span>
         </label>
         <input
           type="range"
-          v-model.number="tolerance"
-          min="0.5"
-          max="10"
-          step="0.5"
+          v-model.number="overlapDuration"
+          min="0.0"
+          max="5.0"
+          step="0.1"
           class="vt-slider"
         />
-        <div class="form-hint vt-muted">允许在目标时长前后 ±{{ tolerance }}s 内寻找静音点</div>
+        <div class="form-hint vt-muted">切片边界向外扩张 {{ overlapDuration.toFixed(1) }}s，形成交叠区域</div>
       </div>
     </div>
 
@@ -146,8 +146,8 @@ const { previewSlices, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
 // 表单状态
 const mode = ref<'duration' | 'size'>('duration');
 const targetValue = ref<number>(60);
-const useSmartSilence = ref<boolean>(true);
-const tolerance = ref<number>(3);
+const useOverlapHandles = ref<boolean>(false);
+const overlapDuration = ref<number>(1.0);
 
 // 计算属性：是否可以生成预览
 const canAnalyze = computed(() => {
@@ -181,12 +181,15 @@ async function handleAnalyze() {
       filePath: activeVideo.value.path,
       mode: mode.value,
       targetValue: targetValue.value,
-      useSmartSilence: useSmartSilence.value,
-      tolerance: tolerance.value,
+      useOverlapHandles: useOverlapHandles.value,
+      overlapDuration: overlapDuration.value,
     };
 
+    console.log('[ToolSlicer] 发送切片分析请求:', params);
     const result = await window.motionSlice.analyzeSlices(params);
+    console.log('[ToolSlicer] 收到切片分析结果:', result);
     sliceStore.setPreviewSlices(result.segments);
+    console.log('[ToolSlicer] 已更新 Store，当前切片数量:', result.segments.length);
   } catch (error) {
     console.error('切片分析失败:', error);
   } finally {

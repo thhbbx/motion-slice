@@ -49,38 +49,62 @@ async function getVideoDuration(filePath: string): Promise<number> {
  * 按时长切分视频
  * @param videoDuration 视频总时长（秒）
  * @param targetDuration 目标切片时长（秒）
- * @param useSmartSilence 是否开启智能断句（当前版本预留）
- * @param tolerance 容差范围（秒）
+ * @param useOverlapHandles 是否开启交叠缓冲
+ * @param overlapDuration 交叠缓冲时长（秒）
  * @returns 切片片段数组
  */
 function sliceByDuration(
   videoDuration: number,
   targetDuration: number,
-  _useSmartSilence: boolean,
-  _tolerance: number
+  useOverlapHandles: boolean,
+  overlapDuration: number
 ): VideoSegment[] {
   const segments: VideoSegment[] = [];
   let currentTime = 0;
   let segmentIndex = 1;
 
   while (currentTime < videoDuration) {
-    const startTime = Math.round(currentTime * 100) / 100;
-    let endTime = Math.min(currentTime + targetDuration, videoDuration);
-    endTime = Math.round(endTime * 100) / 100;
+    // 原始逻辑切片范围（未扩张）
+    const logicalStart = Math.round(currentTime * 100) / 100;
+    let logicalEnd = Math.min(currentTime + targetDuration, videoDuration);
+    logicalEnd = Math.round(logicalEnd * 100) / 100;
 
-    // TODO: 未来在此处集成 FFmpeg silencedetect 实现智能断句
-    // if (useSmartSilence) {
-    //   endTime = adjustEndTimeBysilence(filePath, endTime, tolerance);
-    // }
+    // 初始化实际导出范围（与逻辑范围相同）
+    let actualStart = logicalStart;
+    let actualEnd = logicalEnd;
+    let headBuffer = 0;
+    let tailBuffer = 0;
+
+    // 应用交叠缓冲：双向向外扩张
+    if (useOverlapHandles && overlapDuration > 0) {
+      // 头部向左扩张（不能小于 0）
+      const expandedStart = logicalStart - overlapDuration;
+      actualStart = Math.max(0, expandedStart);
+      headBuffer = logicalStart - actualStart; // 实际扩张了多少
+
+      // 尾部向右扩张（不能超过总时长）
+      const expandedEnd = logicalEnd + overlapDuration;
+      actualEnd = Math.min(videoDuration, expandedEnd);
+      tailBuffer = actualEnd - logicalEnd; // 实际扩张了多少
+
+      // 重新四舍五入到两位小数
+      actualStart = Math.round(actualStart * 100) / 100;
+      actualEnd = Math.round(actualEnd * 100) / 100;
+      headBuffer = Math.round(headBuffer * 100) / 100;
+      tailBuffer = Math.round(tailBuffer * 100) / 100;
+    }
 
     segments.push({
       id: `segment-${segmentIndex}`,
-      startTime,
-      endTime,
+      startTime: actualStart,
+      endTime: actualEnd,
       label: `片段 ${segmentIndex}`,
+      headBuffer,
+      tailBuffer,
     });
 
-    currentTime = endTime;
+    // 下一个片段的起始点仍然基于原始逻辑切点（不考虑交叠）
+    currentTime = logicalEnd;
     segmentIndex++;
   }
 
@@ -92,19 +116,23 @@ function sliceByDuration(
  * @param videoDuration 视频总时长（秒）
  * @param fileSizeMB 视频文件大小（MB）
  * @param targetSizeMB 目标切片大小（MB）
+ * @param useOverlapHandles 是否开启交叠缓冲
+ * @param overlapDuration 交叠缓冲时长（秒）
  * @returns 切片片段数组
  */
 function sliceBySize(
   videoDuration: number,
   fileSizeMB: number,
-  targetSizeMB: number
+  targetSizeMB: number,
+  useOverlapHandles: boolean,
+  overlapDuration: number
 ): VideoSegment[] {
   // 计算每秒的平均大小
   const mbPerSecond = fileSizeMB / videoDuration;
   // 计算目标时长
   const targetDuration = targetSizeMB / mbPerSecond;
 
-  return sliceByDuration(videoDuration, targetDuration, false, 0);
+  return sliceByDuration(videoDuration, targetDuration, useOverlapHandles, overlapDuration);
 }
 
 /**
@@ -113,14 +141,15 @@ function sliceBySize(
 export function registerSliceHandler() {
   ipcMain.handle('analyze-video-slices', async (_, params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> => {
     try {
-      const { filePath, mode, targetValue, useSmartSilence, tolerance } = params;
+      console.log('[SliceHandler] 收到切片分析请求:', params);
+      const { filePath, mode, targetValue, useOverlapHandles, overlapDuration } = params;
 
       // 参数验证
       if (targetValue <= 0) {
         throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
       }
-      if (tolerance < 0) {
-        throw new Error(`容差范围不能为负数，当前值: ${tolerance}`);
+      if (overlapDuration < 0 || overlapDuration > 5) {
+        throw new Error(`交叠缓冲时长必须在 0-5 秒之间，当前值: ${overlapDuration}`);
       }
 
       // 文件路径验证
@@ -140,7 +169,7 @@ export function registerSliceHandler() {
       let segments: VideoSegment[];
 
       if (mode === 'duration') {
-        segments = sliceByDuration(videoDuration, targetValue, useSmartSilence, tolerance);
+        segments = sliceByDuration(videoDuration, targetValue, useOverlapHandles, overlapDuration);
       } else {
         // 按大小切分需要先获取文件大小
         let stats;
@@ -153,8 +182,11 @@ export function registerSliceHandler() {
           throw new Error(`无法读取文件信息: ${statError instanceof Error ? statError.message : String(statError)}`);
         }
         const fileSizeMB = stats.size / (1024 * 1024);
-        segments = sliceBySize(videoDuration, fileSizeMB, targetValue);
+        segments = sliceBySize(videoDuration, fileSizeMB, targetValue, useOverlapHandles, overlapDuration);
       }
+
+      console.log('[SliceHandler] 生成切片数量:', segments.length);
+      console.log('[SliceHandler] 前 3 个切片:', segments.slice(0, 3));
 
       return {
         segments,
