@@ -1,12 +1,10 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerDMG } from '@electron-forge/maker-dmg';
-import { MakerZIP } from '@electron-forge/maker-zip';
-import { MakerDeb } from '@electron-forge/maker-deb';
-import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import path from 'path';
 
 const config: ForgeConfig = {
   // 核心打包配置：决定了你应用的基础信息和文件打包方式
@@ -23,30 +21,19 @@ const config: ForgeConfig = {
   // 重新编译 C++ 原生模块的配置（如果没用到 sqlite3、ffi-napi 等底层库，留空即可）
   rebuildConfig: {},
   // Maker (打包引擎)：决定了你的代码最终变成什么格式的安装包
+  // 💡 提示：如果不加任何参数直接运行 `npm run make`，Forge 会自动执行当前系统支持的所有引擎。
   makers: [
-    // 1. Windows 安装包引擎 (.exe)
-    // 作用：生成带有安装向导的 Setup.exe 文件。默认会在 Windows 环境下自动触发。
+    // Windows: 一键安装包 (.exe)
     new MakerSquirrel({
-      name: 'MotionSlice', // 安装到电脑后，在“控制面板-卸载程序”里显示的名字
-      setupIcon: './assets/MotionSlicelOGO.ico' // 安装程序(.exe)本身的图标，必须是 .ico 格式
+      name: 'MotionSlice',
+      setupIcon: './assets/MotionSlicelOGO.ico'
     }),
 
-    // 2. Mac 专属安装包引擎 (.dmg)
-    // 作用：生成 Mac 经典的拖拽式安装盘。
-    // ⚠️ 物理警告：这个引擎只能在 macOS 系统下运行！在 Windows 上强行打 Mac 包会直接报错拦截。
+    // macOS: 拖拽安装包 (.dmg)
     new MakerDMG({
-      format: 'ULFO' // ULFO 是 macOS 推荐的高压缩率只读磁盘映像格式
+      name: 'MotionSlice',
+      format: 'ULFO'
     }),
-
-    // 3. Mac 压缩包引擎 (.zip)
-    // 作用：通常作为 Mac 的备选下载方案（解压后直接是一个 .app 文件）。
-    // ['darwin'] 参数表示：这个打包规则“仅限”在构建目标为 Mac 时才被激活。
-    new MakerZIP({}, ['darwin']),
-
-    // 4. Linux 安装包引擎
-    // 作用：为不同发型版的 Linux 提供安装包。
-    new MakerRpm({}), // 针对 RedHat系 (.rpm)，如 CentOS, Fedora
-    new MakerDeb({}), // 针对 Debian/Ubuntu系 (.deb)
   ],
   plugins: [
     // Vite 插件桥接：将 Electron 繁杂的编译过程托管给 Vite，实现极速热更新
