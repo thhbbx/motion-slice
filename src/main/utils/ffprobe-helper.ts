@@ -44,5 +44,23 @@ export function getFfprobePath(): string {
   console.log('[getFfprobePath] 计算路径:', ffprobePath);
   console.log('[getFfprobePath] 文件存在:', fs.existsSync(ffprobePath));
 
+  // macOS/Linux: 确保二进制文件有可执行权限
+  if (platform !== 'win32' && fs.existsSync(ffprobePath)) {
+    try {
+      const stats = fs.statSync(ffprobePath);
+      // 检查是否有执行权限（owner execute bit）
+      const hasExecutePermission = (stats.mode & fs.constants.S_IXUSR) !== 0;
+
+      if (!hasExecutePermission) {
+        console.warn('[getFfprobePath] 文件缺少执行权限，尝试修复...');
+        // 添加执行权限：0o755 = rwxr-xr-x
+        fs.chmodSync(ffprobePath, 0o755);
+        console.log('[getFfprobePath] 已添加执行权限');
+      }
+    } catch (error) {
+      console.error('[getFfprobePath] 权限检查/修复失败:', error);
+    }
+  }
+
   return ffprobePath;
 }

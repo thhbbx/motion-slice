@@ -5,6 +5,7 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import path from 'path';
+import fs from 'fs';
 
 const config: ForgeConfig = {
   // 核心打包配置：决定了你应用的基础信息和文件打包方式
@@ -15,8 +16,32 @@ const config: ForgeConfig = {
     // Mac 专属包名配置（如果以后要上架 Mac 或做代码签名，这个必填）
     // appBundleId: 'com.yourname.motionslice',
     asar: {
-      unpack: '{**/node_modules/ffprobe-static/**/*,**/node_modules/ffmpeg-static/**/*}'
+      unpack: '**/node_modules/{ffprobe-static,ffmpeg-static}/**/*'
     },
+
+    // 打包后处理钩子：确保 macOS/Linux 上的二进制文件有执行权限
+    afterCopy: [
+      (buildPath, electronVersion, platform, arch, callback) => {
+        if (platform === 'darwin' || platform === 'linux') {
+          const binaryPaths = [
+            path.join(buildPath, 'node_modules', 'ffprobe-static', 'bin', platform, arch, 'ffprobe'),
+            path.join(buildPath, 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+          ];
+
+          for (const binaryPath of binaryPaths) {
+            if (fs.existsSync(binaryPath)) {
+              try {
+                fs.chmodSync(binaryPath, 0o755);
+                console.log(`[Forge] 已设置执行权限: ${binaryPath}`);
+              } catch (error) {
+                console.error(`[Forge] 设置执行权限失败: ${binaryPath}`, error);
+              }
+            }
+          }
+        }
+        callback();
+      }
+    ],
   },
   // 重新编译 C++ 原生模块的配置（如果没用到 sqlite3、ffi-napi 等底层库，留空即可）
   rebuildConfig: {},
