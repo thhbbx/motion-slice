@@ -17,16 +17,23 @@ export const useVideoStore = defineStore('video', () => {
   async function setActiveVideo(video: FileNode | null) {
     if (!video) {
       selectedVideos.value = [];
+      currentTime.value = 0;
+      duration.value = 0;
       return;
     }
     selectedVideos.value = [video];
+    currentTime.value = 0;
     await loadVideoMetadata(video);
   }
 
-  function setSelectedVideos(videos: FileNode[]) {
+  async function setSelectedVideos(videos: FileNode[]) {
     selectedVideos.value = videos;
     if (videos.length === 1) {
-      loadVideoMetadata(videos[0]);
+      currentTime.value = 0;
+      await loadVideoMetadata(videos[0]);
+    } else {
+      currentTime.value = 0;
+      duration.value = 0;
     }
   }
 

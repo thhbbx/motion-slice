@@ -170,6 +170,7 @@ const hiddenCanvasElement = ref<HTMLCanvasElement | null>(null);
 const thumbnails = ref<string[]>([]);
 const isThumbnailsLoading = ref(false);
 const thumbProgress = ref(0);
+const isGeneratingThumbnails = ref(false); // 防止并发生成
 
 // 步骤 1：定义时间轴刻度接口
 interface TimelineTick {
@@ -455,8 +456,12 @@ async function generateThumbnails(videoPath: string) {
   const video = hiddenVideoElement.value;
   if (!video || duration.value === 0) return;
 
+  // 防止并发生成
+  if (isGeneratingThumbnails.value) return;
+
   console.log('[Timeline] 开始生成缩略图:', videoPath);
 
+  isGeneratingThumbnails.value = true;
   isThumbnailsLoading.value = true;
   thumbnails.value = [];
   thumbProgress.value = 0;
@@ -522,24 +527,36 @@ async function generateThumbnails(videoPath: string) {
   } finally {
     isThumbnailsLoading.value = false;
     thumbProgress.value = 0;
+    isGeneratingThumbnails.value = false;
   }
 }
 
 // 任务 4-6：监听 activeVideo 变化，触发缩略图生成
 watch(activeVideo, async (newVideo, oldVideo) => {
-  // 立即重置状态，让 UI 瞬间切出"未加载视频"
+  // 立即重置缩略图数组
   thumbnails.value = [];
-  isThumbnailsLoading.value = true;
-  thumbProgress.value = 0;
 
-  // 必须等待 DOM 更新，确保隐藏 video 的 src 已被 Vue 绑定
+  // 如果取消选择，重置 duration
+  if (!newVideo) {
+    videoStore.setDuration(0);
+    return;
+  }
+
+  // 等待 DOM 渲染
   await nextTick();
 
-  if (newVideo?.path) {
-    // 【修复】必须 await，否则异步错误无法被捕获
+  // 如果 duration 已经有值，且缩略图为空，且 DOM 元素已就绪，立即生成
+  if (duration.value > 0 && thumbnails.value.length === 0 && hiddenVideoElement.value && hiddenCanvasElement.value) {
     await generateThumbnails(newVideo.path);
-  } else {
-    isThumbnailsLoading.value = false;
+  }
+}, { immediate: true });
+
+// 监听 duration 变化，确保元数据加载完成后触发缩略图生成
+watch(duration, async (newDuration) => {
+  // 当 duration 变化且大于 0，且当前有选中视频，且缩略图为空时触发
+  if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0) {
+    await nextTick();
+    await generateThumbnails(activeVideo.value.path);
   }
 });
 </script>
