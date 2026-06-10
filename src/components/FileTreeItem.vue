@@ -139,7 +139,7 @@ function handleNodeClick(event: MouseEvent) {
     if (event.ctrlKey || event.metaKey || event.shiftKey) {
       videoStore.toggleVideoSelection(props.node);
     } else {
-      videoStore.setActiveVideo(props.node);
+      videoStore.setSelectedVideos([props.node]);
     }
   }
 }

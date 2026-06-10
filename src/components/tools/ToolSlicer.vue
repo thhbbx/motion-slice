@@ -221,7 +221,9 @@ async function handleAnalyze() {
       params.filePath = videos[0].path;
       const result = await window.motionSlice.analyzeSlices(params);
       sliceStore.setPreviewSlices(result.segments);
+      sliceStore.setBatchSliceGroups([]);
     } else {
+      sliceStore.setPreviewSlices([]);
       const groups: any[] = [];
       for (const video of videos) {
         params.filePath = video.path;
