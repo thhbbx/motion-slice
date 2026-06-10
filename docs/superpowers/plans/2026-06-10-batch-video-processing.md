@@ -43,7 +43,7 @@
 - 创建：`src/types/import-filter.ts`
 - 创建：`src/store/useImportFilterStore.ts`
 
-- [ ] **步骤 1：定义导入过滤配置类型**
+- [x] **步骤 1：定义导入过滤配置类型**
 
 ```typescript
 // src/types/import-filter.ts
@@ -78,7 +78,7 @@ export interface ImportFilterResult {
 }
 ```
 
-- [ ] **步骤 2：创建导入过滤 Store**
+- [x] **步骤 2：创建导入过滤 Store**
 
 ```typescript
 // src/store/useImportFilterStore.ts
@@ -131,7 +131,7 @@ export const useImportFilterStore = defineStore('importFilter', () => {
 - 创建：`src/main/utils/import-filter.ts`
 - 修改：`src/main/handlers/dialog-handler.ts`
 
-- [ ] **步骤 1：实现主进程过滤逻辑**
+- [x] **步骤 1：实现主进程过滤逻辑**
 
 ```typescript
 // src/main/utils/import-filter.ts
@@ -222,7 +222,7 @@ export async function filterVideoFiles(
 }
 ```
 
-- [ ] **步骤 2：集成过滤引擎到 dialog-handler**
+- [x] **步骤 2：集成过滤引擎到 dialog-handler**
 
 在 `src/main/handlers/dialog-handler.ts` 中修改 `dialog:select-media` handler：
 
@@ -301,7 +301,7 @@ ipcMain.handle('dialog:select-media-with-filter', async (event, filterConfig: Im
 - 修改：`src/types/preload.d.ts`
 - 修改：`src/preload.ts`
 
-- [ ] **步骤 1：更新 preload 类型定义**
+- [x] **步骤 1：更新 preload 类型定义**
 
 在 `src/types/preload.d.ts` 中添加新接口：
 
@@ -315,7 +315,7 @@ selectMediaFilesWithFilter: (config: ImportFilterConfig) => Promise<{
 }>;
 ```
 
-- [ ] **步骤 2：在 preload.ts 中暴露新接口**
+- [x] **步骤 2：在 preload.ts 中暴露新接口**
 
 在 `src/preload.ts` 的 `contextBridge.exposeInMainWorld` 中添加：
 
@@ -331,7 +331,7 @@ selectMediaFilesWithFilter: (config: ImportFilterConfig) =>
 **文件：**
 - 创建：`src/components/ImportFilterModal.vue`
 
-- [ ] **步骤 1：创建弹窗组件模板**
+- [x] **步骤 1：创建弹窗组件模板**
 
 创建文件 `src/components/ImportFilterModal.vue`，内容如下（分3部分）：
 
@@ -448,7 +448,7 @@ function handleReset() { filterStore.resetConfig(); localConfig.value = { ...con
 **文件：**
 - 修改：`src/components/Sidebar.vue`
 
-- [ ] **步骤 1：在 Sidebar.vue 添加偏好设置按钮和弹窗**
+- [x] **步骤 1：在 Sidebar.vue 添加偏好设置按钮和弹窗**
 
 在 `<template>` 的 panel-header 中，修改为：
 
@@ -474,7 +474,7 @@ function handleReset() { filterStore.resetConfig(); localConfig.value = { ...con
 <ImportFilterModal :visible="showFilterModal" @close="showFilterModal = false" @save="handleFilterSave" />
 ```
 
-- [ ] **步骤 2：添加弹窗逻辑和导入过滤**
+- [x] **步骤 2：添加弹窗逻辑和导入过滤**
 
 在 `<script setup>` 中添加：
 
@@ -505,7 +505,7 @@ function handleFilterSave(config: ImportFilterConfig) {
 }
 ```
 
-- [ ] **步骤 3：添加按钮样式**
+- [x] **步骤 3：添加按钮样式**
 
 在 `<style scoped>` 中添加：
 
@@ -546,7 +546,7 @@ function handleFilterSave(config: ImportFilterConfig) {
 **文件：**
 - 修改：`src/store/useVideoStore.ts`
 
-- [ ] **步骤 1：将 activeVideo 改为 selectedVideos 数组**
+- [x] **步骤 1：将 activeVideo 改为 selectedVideos 数组**
 
 修改 `src/store/useVideoStore.ts`：
 
@@ -662,7 +662,7 @@ export const useVideoStore = defineStore('video', () => {
 - 修改：`src/components/FileTreeItem.vue`
 - 创建：`src/utils/multi-select.ts`
 
-- [ ] **步骤 1：创建多选辅助函数**
+- [x] **步骤 1：创建多选辅助函数**
 
 ```typescript
 // src/utils/multi-select.ts
@@ -707,7 +707,7 @@ export function createMultiSelectHandler(
 }
 ```
 
-- [ ] **步骤 2：在 FileTreeItem 添加 Checkbox**
+- [x] **步骤 2：在 FileTreeItem 添加 Checkbox**
 
 修改 `src/components/FileTreeItem.vue` 的模板：
 
@@ -728,7 +728,7 @@ export function createMultiSelectHandler(
 </div>
 ```
 
-- [ ] **步骤 3：更新点击逻辑支持多选**
+- [x] **步骤 3：更新点击逻辑支持多选**
 
 在 `<script setup>` 中修改：
 
@@ -758,7 +758,7 @@ function handleCheckboxClick() {
 }
 ```
 
-- [ ] **步骤 4：添加 Checkbox 样式**
+- [x] **步骤 4：添加 Checkbox 样式**
 
 ```css
 .tree-checkbox {
@@ -777,7 +777,7 @@ function handleCheckboxClick() {
 **文件：**
 - 修改：`src/components/Sidebar.vue`
 
-- [ ] **步骤 1：添加全选按钮**
+- [x] **步骤 1：添加全选按钮**
 
 在 `panel-header` 下方添加全选栏：
 
@@ -789,7 +789,7 @@ function handleCheckboxClick() {
 </div>
 ```
 
-- [ ] **步骤 2：实现全选逻辑**
+- [x] **步骤 2：实现全选逻辑**
 
 ```typescript
 import { computed } from 'vue';
@@ -832,7 +832,7 @@ function handleSelectAll() {
 }
 ```
 
-- [ ] **步骤 3：添加工具栏样式**
+- [x] **步骤 3：添加工具栏样式**
 
 ```css
 .select-toolbar {
@@ -866,7 +866,7 @@ function handleSelectAll() {
 **文件：**
 - 创建：`src/components/BatchVideoGrid.vue`
 
-- [ ] **步骤 1：创建批量视图表格组件**
+- [x] **步骤 1：创建批量视图表格组件**
 
 创建文件 `src/components/BatchVideoGrid.vue`，完整代码见下方。该组件展示选中视频的表格，包含文件名、时长、大小、状态列。
 
@@ -877,11 +877,11 @@ function handleSelectAll() {
 **文件：**
 - 修改：`src/App.vue`
 
-- [ ] **步骤 1：根据选中数量切换视图**
+- [x] **步骤 1：根据选中数量切换视图**
 
 在 workspace 中添加条件判断：当 `selectedVideos.length <= 1` 时显示播放器和时间轴，否则显示 BatchVideoGrid。
 
-- [ ] **步骤 2：引入 BatchVideoGrid 组件**
+- [x] **步骤 2：引入 BatchVideoGrid 组件**
 
 在 script 中导入并使用 BatchVideoGrid 组件。
 
@@ -892,11 +892,11 @@ function handleSelectAll() {
 **文件：**
 - 修改：`src/components/Inspector.vue`
 
-- [ ] **步骤 1：在工作台 Tab 添加批量提示横幅**
+- [x] **步骤 1：在工作台 Tab 添加批量提示横幅**
 
 当 `selectedVideos.length > 1` 时，在工具选择器上方显示提示："当前规则将应用于选中的 N 个视频"。
 
-- [ ] **步骤 2：添加横幅样式**
+- [x] **步骤 2：添加横幅样式**
 
 使用 `var(--vt-primary-soft)` 背景色，边框使用主色调。
 
@@ -908,19 +908,19 @@ function handleSelectAll() {
 - 修改：`src/components/tools/ToolSlicer.vue`
 - 修改：`src/store/useSliceStore.ts`
 
-- [ ] **步骤 1：扩展 SliceStore 数据结构**
+- [x] **步骤 1：扩展 SliceStore 数据结构**
 
 添加 `batchSliceGroups` 状态，存储多视频的切片分组数据。每个分组包含 videoId、videoName、segments、isExpanded。
 
-- [ ] **步骤 2：修改 handleAnalyze 支持批量**
+- [x] **步骤 2：修改 handleAnalyze 支持批量**
 
 检测 selectedVideos 数量，如果大于1则循环调用分析接口，将结果存入 batchSliceGroups。
 
-- [ ] **步骤 3：切片列表 UI 改为树形**
+- [x] **步骤 3：切片列表 UI 改为树形**
 
 单选模式保持平铺列表，批量模式使用可折叠的树形结构，父节点显示视频名称和片段数量。
 
-- [ ] **步骤 4：添加树形展开/折叠样式**
+- [x] **步骤 4：添加树形展开/折叠样式**
 
 箭头图标旋转动画，嵌套子项缩进样式。
 
