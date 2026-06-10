@@ -157,11 +157,6 @@ const { currentTime, duration, activeVideo } = storeToRefs(videoStore);
 const sliceStore = useSliceStore();
 const { previewSlices, activeSliceId } = storeToRefs(sliceStore);
 
-// 调试：监控切片数据变化
-watch(previewSlices, (newSlices) => {
-  console.log('[Timeline] previewSlices 更新:', newSlices.length, newSlices);
-}, { immediate: true, deep: true });
-
 const tracksContainer = ref<HTMLDivElement | null>(null);
 
 // 任务 4-6：缩略图生成相关状态
@@ -170,7 +165,7 @@ const hiddenCanvasElement = ref<HTMLCanvasElement | null>(null);
 const thumbnails = ref<string[]>([]);
 const isThumbnailsLoading = ref(false);
 const thumbProgress = ref(0);
-const isGeneratingThumbnails = ref(false); // 防止并发生成
+const currentGenerationId = ref(0); // 任务标识，用于中止过期任务
 
 // 步骤 1：定义时间轴刻度接口
 interface TimelineTick {
@@ -322,10 +317,11 @@ const timelineTicks = computed<TimelineTick[]>(() => {
 });
 
 // 任务 4-6：单帧捕获辅助函数（带超时保护）
-async function seekAndCapture(video: HTMLVideoElement, targetTime: number): Promise<string> {
+async function seekAndCapture(video: HTMLVideoElement, targetTime: number, taskId: number): Promise<string> {
   const canvas = hiddenCanvasElement.value;
   if (!canvas) {
-    throw new Error('Canvas element not found');
+    // 组件已销毁或任务已过期，返回占位符
+    return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   }
 
   const ctx = canvas.getContext('2d');
@@ -392,11 +388,6 @@ async function seekAndCapture(video: HTMLVideoElement, targetTime: number): Prom
   ]);
 }
 
-// 任务 4-6：视频帧捕获函数（已废弃，使用 seekAndCapture 替代）
-async function captureVideoFrame(video: HTMLVideoElement, time: number): Promise<string> {
-  return seekAndCapture(video, time);
-}
-
 // 任务 4-6：等待视频元数据加载完成（带超时保护）
 async function waitForMetadata(video: HTMLVideoElement): Promise<void> {
   console.log('[Timeline] 开始等待 Metadata...');
@@ -456,12 +447,11 @@ async function generateThumbnails(videoPath: string) {
   const video = hiddenVideoElement.value;
   if (!video || duration.value === 0) return;
 
-  // 防止并发生成
-  if (isGeneratingThumbnails.value) return;
-
   console.log('[Timeline] 开始生成缩略图:', videoPath);
 
-  isGeneratingThumbnails.value = true;
+  // 分配新的任务 ID，旧任务会自动过期
+  const taskId = ++currentGenerationId.value;
+
   isThumbnailsLoading.value = true;
   thumbnails.value = [];
   thumbProgress.value = 0;
@@ -476,6 +466,12 @@ async function generateThumbnails(videoPath: string) {
 
     // 等待视频元数据加载完成（修复首次加载竞态问题）
     await waitForMetadata(video);
+
+    // 检查任务是否已被替代
+    if (taskId !== currentGenerationId.value) {
+      console.log('[Timeline] 任务已过期，中止生成');
+      return;
+    }
 
     // 确保视频尺寸有效
     if (video.videoWidth === 0 || video.videoHeight === 0) {
@@ -494,11 +490,23 @@ async function generateThumbnails(videoPath: string) {
 
     // 渐进式渲染：逐帧生成并实时推入数组
     for (let i = 0; i < count; i++) {
+      // 每次循环前检查任务是否已被替代
+      if (taskId !== currentGenerationId.value) {
+        console.log('[Timeline] 任务已过期，中止生成');
+        return;
+      }
+
       const time = i * actualInterval;
 
       try {
         // 【任务 2】使用带超时保护的 seekAndCapture
-        const frameData = await seekAndCapture(video, time);
+        const frameData = await seekAndCapture(video, time, taskId);
+
+        // 再次检查任务是否已被替代（await 后状态可能变化）
+        if (taskId !== currentGenerationId.value) {
+          console.log('[Timeline] 任务已过期，中止生成');
+          return;
+        }
 
         // 立即推入数组，触发 UI 实时渲染
         thumbnails.value.push(frameData);
@@ -525,16 +533,22 @@ async function generateThumbnails(videoPath: string) {
     console.error('[Timeline] 缩略图生成失败:', error);
     thumbnails.value = [];
   } finally {
-    isThumbnailsLoading.value = false;
-    thumbProgress.value = 0;
-    isGeneratingThumbnails.value = false;
+    // 只有当前任务才能清空加载状态
+    if (taskId === currentGenerationId.value) {
+      isThumbnailsLoading.value = false;
+      thumbProgress.value = 0;
+    }
   }
 }
 
 // 任务 4-6：监听 activeVideo 变化，触发缩略图生成
 watch(activeVideo, async (newVideo, oldVideo) => {
-  // 立即重置缩略图数组
+  // 递增 ID 中止旧任务
+  currentGenerationId.value++;
+  // 立即重置所有状态
   thumbnails.value = [];
+  isThumbnailsLoading.value = false;
+  thumbProgress.value = 0;
 
   // 如果取消选择，重置 duration
   if (!newVideo) {
