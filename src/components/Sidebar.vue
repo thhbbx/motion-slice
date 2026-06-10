@@ -105,7 +105,17 @@ const allVideosSelected = computed(() =>
 
 async function handleImport() {
   try {
-    const result = await window.motionSlice.selectMediaFilesWithFilter({ ...filterStore.config });
+    const plainConfig = {
+      enableSizeFilter: filterStore.config.enableSizeFilter,
+      minSizeMB: filterStore.config.minSizeMB,
+      maxSizeMB: filterStore.config.maxSizeMB,
+      enableDurationFilter: filterStore.config.enableDurationFilter,
+      minDurationSec: filterStore.config.minDurationSec,
+      maxDurationSec: filterStore.config.maxDurationSec,
+      enableFormatFilter: filterStore.config.enableFormatFilter,
+      allowedFormats: [...filterStore.config.allowedFormats],
+    };
+    const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
     fileTreeStore.roots = result.fileTree;
     if (result.summary) {
       console.log(result.summary);
