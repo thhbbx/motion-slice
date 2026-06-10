@@ -105,7 +105,7 @@ const allVideosSelected = computed(() =>
 
 async function handleImport() {
   try {
-    const result = await window.motionSlice.selectMediaFilesWithFilter(filterStore.config);
+    const result = await window.motionSlice.selectMediaFilesWithFilter({ ...filterStore.config });
     fileTreeStore.roots = result.fileTree;
     if (result.summary) {
       console.log(result.summary);
