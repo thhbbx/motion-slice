@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { FileNode, VideoMetadata } from './types/file-tree';
 import type { SliceAnalyzeParams, SliceAnalyzeResult } from './types/slice';
 import type { ExportExecuteParams, ExportProgressEvent } from './types/export';
+import type { ImportFilterConfig } from './types/import-filter';
 
 // 暴露安全的 API 给渲染进程
 contextBridge.exposeInMainWorld('motionSlice', {
@@ -11,6 +12,10 @@ contextBridge.exposeInMainWorld('motionSlice', {
    */
   selectMediaFiles: (): Promise<FileNode[]> => {
     return ipcRenderer.invoke('dialog:select-media');
+  },
+
+  selectMediaFilesWithFilter: (config: ImportFilterConfig): Promise<{ fileTree: FileNode[]; summary: string }> => {
+    return ipcRenderer.invoke('dialog:select-media-with-filter', config);
   },
 
   /**
@@ -84,6 +89,7 @@ declare global {
   interface Window {
     motionSlice: {
       selectMediaFiles: () => Promise<FileNode[]>;
+      selectMediaFilesWithFilter: (config: ImportFilterConfig) => Promise<{ fileTree: FileNode[]; summary: string }>;
       showItemInFolder: (filePath: string) => void;
       getVideoMetadata: (filePath: string) => Promise<VideoMetadata>;
       analyzeSlices: (params: SliceAnalyzeParams) => Promise<SliceAnalyzeResult>;

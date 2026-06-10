@@ -3,6 +3,8 @@ import { scanVideoFiles } from '../utils/video-scanner';
 import { FileNode } from '../../types/file-tree';
 import path from 'node:path';
 import os from 'node:os';
+import { filterVideoFiles } from '../utils/import-filter';
+import type { ImportFilterConfig } from '../../types/import-filter';
 
 /**
  * 获取系统默认下载目录
@@ -49,6 +51,64 @@ export function registerDialogHandlers() {
       const fileTree = scanVideoFiles(result.filePaths);
       console.log('[Dialog Handler] 扫描完成，文件数:', fileTree.length);
       return fileTree;
+    } catch (error) {
+      console.error('[Dialog Handler] 文件选择失败:', error);
+      throw new Error('文件选择失败，请重试');
+    }
+  });
+
+  ipcMain.handle('dialog:select-media-with-filter', async (event, filterConfig: ImportFilterConfig) => {
+    console.log('[Dialog Handler] 收到 select-media-with-filter 请求');
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile', 'openDirectory', 'multiSelections'],
+        title: '选择视频文件或文件夹',
+        buttonLabel: '导入',
+        filters: [
+          { name: '视频文件', extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv'] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { fileTree: [], summary: '' };
+      }
+
+      const fileTree = scanVideoFiles(result.filePaths);
+
+      const allVideoPaths: string[] = [];
+      function collectVideos(nodes: FileNode[]) {
+        for (const node of nodes) {
+          if (node.type === 'file') {
+            allVideoPaths.push(node.path);
+          } else if (node.children) {
+            collectVideos(node.children);
+          }
+        }
+      }
+      collectVideos(fileTree);
+
+      const { accepted, rejected } = await filterVideoFiles(allVideoPaths, filterConfig);
+
+      const acceptedSet = new Set(accepted);
+      function filterTree(nodes: FileNode[]): FileNode[] {
+        return nodes
+          .map(node => {
+            if (node.type === 'file') {
+              return acceptedSet.has(node.path) ? node : null;
+            } else if (node.children) {
+              const filteredChildren = filterTree(node.children);
+              return filteredChildren.length > 0 ? { ...node, children: filteredChildren } : null;
+            }
+            return null;
+          })
+          .filter((node): node is FileNode => node !== null);
+      }
+
+      const filteredTree = filterTree(fileTree);
+      const summary = `成功导入 ${accepted.length} 个视频，按规则过滤掉 ${rejected.length} 个`;
+
+      return { fileTree: filteredTree, summary };
     } catch (error) {
       console.error('[Dialog Handler] 文件选择失败:', error);
       throw new Error('文件选择失败，请重试');
