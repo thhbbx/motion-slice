@@ -11,6 +11,14 @@
       @click="handleNodeClick"
       :title="node.name"
     >
+      <input
+        v-if="node.type === 'file'"
+        type="checkbox"
+        :checked="isSelected"
+        @click.stop="handleCheckboxClick"
+        class="tree-checkbox"
+      />
+
       <!-- 文件夹箭头图标 -->
       <svg
         v-if="node.type === 'directory'"
@@ -115,28 +123,29 @@ const props = defineProps<Props>();
 const fileTreeStore = useFileTreeStore();
 const videoStore = useVideoStore();
 
-// 计算属性：是否选中（改为通过 activeVideo 判断）
 const isSelected = computed(() => {
   return props.node.type === 'file' &&
-         videoStore.activeVideo?.path === props.node.path;
+         videoStore.selectedVideos.some(v => v.id === props.node.id);
 });
 
-// 计算属性：是否展开（仅目录）
 const isExpanded = computed(() => {
   return props.node.type === 'directory' && fileTreeStore.isDirectoryExpanded(props.node.id);
 });
 
-// 处理节点点击
-function handleNodeClick() {
+function handleNodeClick(event: MouseEvent) {
   if (props.node.type === 'directory') {
-    // 切换目录展开/折叠
     fileTreeStore.toggleDirectory(props.node.id);
   } else {
-    // 选中文件（保留原有逻辑）
-    fileTreeStore.selectFile(props.node.id);
-    // 新增：同步更新 videoStore
-    videoStore.setActiveVideo(props.node);
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      videoStore.toggleVideoSelection(props.node);
+    } else {
+      videoStore.setActiveVideo(props.node);
+    }
   }
+}
+
+function handleCheckboxClick() {
+  videoStore.toggleVideoSelection(props.node);
 }
 </script>
 
@@ -184,6 +193,14 @@ function handleNodeClick() {
 
 .tree-icon-arrow-expanded {
   transform: rotate(90deg);
+}
+
+.tree-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--vt-primary);
 }
 
 .tree-icon-folder,
