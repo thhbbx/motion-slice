@@ -117,6 +117,13 @@
 
         <!-- 工作台 Tab -->
         <div v-else-if="activeTab === 'workbench'" class="tab-pane">
+          <div v-if="selectedVideos.length > 1" class="batch-mode-banner">
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <span>当前规则将应用于选中的 {{ selectedVideos.length }} 个视频</span>
+          </div>
+
           <div class="tool-selector">
             <label class="tool-label">选择工具</label>
             <select v-model="currentTool" class="tool-select">
@@ -173,7 +180,7 @@ import ToolSlicer from './tools/ToolSlicer.vue';
 import ExportTab from './ExportTab.vue';
 
 const videoStore = useVideoStore();
-const { activeVideo, isFetchingMetadata } = storeToRefs(videoStore);
+const { activeVideo, isFetchingMetadata, selectedVideos } = storeToRefs(videoStore);
 
 const activeTab = ref<'properties' | 'workbench' | 'export'>('properties');
 
@@ -305,6 +312,22 @@ function formatCreatedTime(metadata: any): string {
   display: flex;
   flex-direction: column;
   gap: var(--vt-space-4);
+}
+
+.batch-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3) var(--vt-space-4);
+  background: var(--vt-primary-soft);
+  border: 1px solid var(--vt-primary);
+  border-radius: var(--vt-radius-md);
+  font-size: 13px;
+  color: var(--vt-primary);
+}
+
+.batch-mode-banner svg {
+  flex-shrink: 0;
 }
 
 /* 属性面板 */

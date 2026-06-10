@@ -100,20 +100,23 @@
     <div class="slicer-list">
       <div class="list-header">
         <h3 class="section-title vt-title">切片预览</h3>
-        <span v-if="previewSlices.length > 0" class="slice-count vt-secondary">
+        <span v-if="selectedVideos.length <= 1 && previewSlices.length > 0" class="slice-count vt-secondary">
           共 {{ previewSlices.length }} 个片段
+        </span>
+        <span v-else-if="batchSliceGroups.length > 0" class="slice-count vt-secondary">
+          共 {{ batchSliceGroups.length }} 个视频
         </span>
       </div>
 
       <!-- 空状态 -->
-      <div v-if="previewSlices.length === 0" class="empty-state">
+      <div v-if="previewSlices.length === 0 && batchSliceGroups.length === 0" class="empty-state">
         <div class="empty-icon">✂️</div>
         <div class="empty-text vt-secondary">暂无切片</div>
         <div class="empty-hint vt-muted">配置参数后点击"生成切片预览"</div>
       </div>
 
-      <!-- 切片列表 -->
-      <div v-else class="slice-items">
+      <!-- 单选模式：切片列表 -->
+      <div v-else-if="selectedVideos.length <= 1 && previewSlices.length > 0" class="slice-items">
         <div
           v-for="slice in previewSlices"
           :key="slice.id"
@@ -123,6 +126,26 @@
           <div class="slice-label">{{ slice.label }}</div>
           <div class="slice-time vt-timecode vt-secondary">
             {{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 批量模式：树形结构 -->
+      <div v-else-if="batchSliceGroups.length > 0" class="slice-tree">
+        <div v-for="group in batchSliceGroups" :key="group.videoId" class="slice-group">
+          <div class="group-header" @click="sliceStore.toggleGroupExpanded(group.videoId)">
+            <svg class="expand-icon" :class="{ expanded: group.isExpanded }" width="16" height="16" viewBox="0 0 16 16">
+              <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="group-title">{{ group.videoName }} (共 {{ group.segments.length }} 个片段)</span>
+          </div>
+          <div v-if="group.isExpanded" class="group-content">
+            <div v-for="slice in group.segments" :key="slice.id" class="slice-item-nested">
+              <div class="slice-label">{{ slice.label }}</div>
+              <div class="slice-time vt-timecode vt-secondary">
+                {{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -143,8 +166,8 @@ const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
 const exportStore = useExportStore();
 
-const { activeVideo } = storeToRefs(videoStore);
-const { previewSlices, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
+const { activeVideo, selectedVideos } = storeToRefs(videoStore);
+const { previewSlices, batchSliceGroups, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
 
 // 表单状态
 const mode = ref<'duration' | 'size'>('duration');
@@ -175,48 +198,42 @@ function handleModeChange(newMode: 'duration' | 'size') {
  * 生成切片预览
  */
 async function handleAnalyze() {
-  if (!activeVideo.value || isAnalyzing.value) return;
+  if (isAnalyzing.value) return;
+
+  const videos = selectedVideos.value.length > 0
+    ? selectedVideos.value
+    : (activeVideo.value ? [activeVideo.value] : []);
+
+  if (videos.length === 0) return;
 
   sliceStore.setAnalyzing(true);
 
   try {
     const params: SliceAnalyzeParams = {
-      filePath: activeVideo.value.path,
+      filePath: '',
       mode: mode.value,
       targetValue: targetValue.value,
       useOverlapHandles: useOverlapHandles.value,
       overlapDuration: overlapDuration.value,
     };
 
-    console.log('[ToolSlicer] 发送切片分析请求:', params);
-    const result = await window.motionSlice.analyzeSlices(params);
-    console.log('[ToolSlicer] 收到切片分析结果:', result);
-    sliceStore.setPreviewSlices(result.segments);
-    console.log('[ToolSlicer] 已更新 Store，当前切片数量:', result.segments.length);
-
-    // 推送导出任务到全局导出池
-    const exportTask: ExportTask = {
-      id: `slicer-${activeVideo.value.path.replace(/[^a-zA-Z0-9]/g, '-')}`,
-      toolId: 'slicer',
-      title: '视频切片导出',
-      summary: `按${mode.value === 'duration' ? '时长' : '大小'} ${targetValue.value}${mode.value === 'duration' ? 's' : 'MB'} 切分，共 ${result.segments.length} 个片段${useOverlapHandles.value ? ` | 交叠缓冲 ${overlapDuration.value.toFixed(1)}s` : ''}`,
-      status: 'pending',
-      payload: {
-        sourceFilePath: activeVideo.value.path,
-        segments: result.segments.map(seg => ({
-          id: seg.id,
-          startTime: seg.startTime,
-          endTime: seg.endTime,
-          label: seg.label,
-        })),
-      },
-      createdAt: Date.now(),
-    };
-    try {
-      exportStore.upsertTask(exportTask);
-      console.log('[ToolSlicer] 已推送导出任务到全局池:', exportTask.id);
-    } catch (error) {
-      console.error('[ToolSlicer] 推送导出任务失败:', error);
+    if (videos.length === 1) {
+      params.filePath = videos[0].path;
+      const result = await window.motionSlice.analyzeSlices(params);
+      sliceStore.setPreviewSlices(result.segments);
+    } else {
+      const groups: any[] = [];
+      for (const video of videos) {
+        params.filePath = video.path;
+        const result = await window.motionSlice.analyzeSlices(params);
+        groups.push({
+          videoId: video.id,
+          videoName: video.name,
+          segments: result.segments,
+          isExpanded: false,
+        });
+      }
+      sliceStore.setBatchSliceGroups(groups);
     }
   } catch (error) {
     console.error('切片分析失败:', error);
@@ -528,5 +545,65 @@ function formatTime(seconds: number): string {
 
 .slice-time {
   font-size: 12px;
+}
+.slice-tree {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+  overflow-y: auto;
+}
+
+.slice-group {
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3);
+  background: var(--vt-bg-elevated);
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.group-header:hover {
+  background: var(--vt-panel-hover);
+}
+
+.expand-icon {
+  flex-shrink: 0;
+  color: var(--vt-text-secondary);
+  transition: transform 180ms ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.group-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.group-content {
+  padding: var(--vt-space-2);
+  background: var(--vt-bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.slice-item-nested {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-1);
+  padding: var(--vt-space-2) var(--vt-space-3);
+  background: var(--vt-bg-soft);
+  border-radius: var(--vt-radius-sm);
 }
 </style>

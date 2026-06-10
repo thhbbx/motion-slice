@@ -1,29 +1,33 @@
 <template>
   <div class="video-tool-page">
-    <!-- 左侧 Sidebar -->
     <Sidebar />
 
-    <!-- 中间 Workspace -->
     <main class="workspace">
-      <!-- 上方：视频预览区 -->
-      <VideoPlayer />
+      <template v-if="selectedVideos.length <= 1">
+        <VideoPlayer />
+        <div class="timeline-area">
+          <Timeline />
+        </div>
+      </template>
 
-      <!-- 下方：时间轴区 -->
-      <div class="timeline-area">
-        <Timeline />
-      </div>
+      <BatchVideoGrid v-else :videos="selectedVideos" />
     </main>
 
-    <!-- 右侧 Inspector -->
     <Inspector />
   </div>
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { useVideoStore } from './store/useVideoStore';
 import Sidebar from './components/Sidebar.vue';
 import VideoPlayer from './components/VideoPlayer.vue';
 import Inspector from './components/Inspector.vue';
 import Timeline from './components/Timeline.vue';
+import BatchVideoGrid from './components/BatchVideoGrid.vue';
+
+const videoStore = useVideoStore();
+const { selectedVideos } = storeToRefs(videoStore);
 </script>
 
 <style scoped>
