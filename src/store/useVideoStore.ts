@@ -1,14 +1,42 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, readonly } from 'vue';
 import type { FileNode } from '../types/file-tree';
+import type { BatchSliceGroup, ExportTask } from '../types/batch';
 import { parseTimecode } from '../utils/timeFormat';
 
 export const useVideoStore = defineStore('video', () => {
   const selectedVideos = ref<FileNode[]>([]);
+  const focusedVideo = ref<FileNode | null>(null);
+  const batchSliceGroups = ref<BatchSliceGroup[]>([]);
 
   const activeVideo = computed(() =>
     selectedVideos.value.length === 1 ? selectedVideos.value[0] : null
   );
+
+  const isBatchMode = computed(() => selectedVideos.value.length > 1);
+
+  const exportTaskQueue = computed<ExportTask[]>(() => {
+    const tasks: ExportTask[] = [];
+
+    for (const group of batchSliceGroups.value) {
+      for (const slice of group.slices) {
+        // 只导出激活的切片
+        if (!slice.isActive) continue;
+
+        tasks.push({
+          id: `export-${slice.id}`,
+          videoPath: group.videoPath,
+          videoName: group.videoName,
+          slice: slice,
+          outputPath: '', // 由导出流程动态生成
+          status: 'pending',
+          progress: 0
+        });
+      }
+    }
+
+    return tasks;
+  });
 
   const isFetchingMetadata = ref(false);
   const currentTime = ref<number>(0);
@@ -85,14 +113,50 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
+  function setFocusedVideo(video: FileNode | null) {
+    focusedVideo.value = video;
+    console.log('[VideoStore] 聚焦视频:', video?.name || 'null');
+  }
+
+  function setBatchSliceGroups(groups: BatchSliceGroup[]) {
+    batchSliceGroups.value = groups;
+    console.log('[VideoStore] 批量切片组更新:', groups.length);
+  }
+
+  function toggleSliceActive(videoId: string, sliceId: string) {
+    const group = batchSliceGroups.value.find(g => g.videoId === videoId);
+    if (!group) return;
+
+    const slice = group.slices.find(s => s.id === sliceId);
+    if (!slice) return;
+
+    slice.isActive = !slice.isActive;
+    console.log(`[VideoStore] 切片 ${sliceId} 状态: ${slice.isActive ? '启用' : '禁用'}`);
+  }
+
+  function play() {
+    isPlaying.value = true;
+  }
+
+  function pause() {
+    isPlaying.value = false;
+  }
+
   return {
-    selectedVideos,
+    selectedVideos: readonly(selectedVideos),
+    focusedVideo: readonly(focusedVideo),
+    batchSliceGroups: readonly(batchSliceGroups),
     activeVideo,
+    isBatchMode,
+    exportTaskQueue,
     isFetchingMetadata,
     currentTime,
     duration,
     setActiveVideo,
     setSelectedVideos,
+    setFocusedVideo,
+    setBatchSliceGroups,
+    toggleSliceActive,
     toggleVideoSelection,
     clearActiveVideo,
     setCurrentTime,

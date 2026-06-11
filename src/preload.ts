@@ -3,6 +3,7 @@ import { FileNode, VideoMetadata } from './types/file-tree';
 import type { SliceAnalyzeParams, SliceAnalyzeResult } from './types/slice';
 import type { ExportExecuteParams, ExportProgressEvent } from './types/export';
 import type { ImportFilterConfig } from './types/import-filter';
+import type { BatchSliceGroup } from './types/batch';
 
 // 暴露安全的 API 给渲染进程
 contextBridge.exposeInMainWorld('motionSlice', {
@@ -42,6 +43,27 @@ contextBridge.exposeInMainWorld('motionSlice', {
    */
   analyzeSlices: (params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> => {
     return ipcRenderer.invoke('analyze-video-slices', params);
+  },
+
+  /**
+   * 批量分析视频切片
+   * @param videos 视频列表（路径、ID、名称）
+   * @param params 切片分析参数（切分模式、目标值等，不含文件路径）
+   * @returns 批量切片组数组
+   */
+  batchAnalyzeSlices: (
+    videos: { path: string; id: string; name: string }[],
+    params: Omit<SliceAnalyzeParams, 'filePath'>
+  ): Promise<BatchSliceGroup[]> => {
+    return ipcRenderer.invoke('batch-analyze-slices', videos, params);
+  },
+
+  /**
+   * 监听批量分析进度
+   * @param callback 进度回调函数
+   */
+  onBatchAnalyzeProgress: (callback: (event: { current: number; total: number }) => void): void => {
+    ipcRenderer.on('batch-analyze-progress', (_, data) => callback(data));
   },
 
   /**
@@ -93,6 +115,11 @@ declare global {
       showItemInFolder: (filePath: string) => void;
       getVideoMetadata: (filePath: string) => Promise<VideoMetadata>;
       analyzeSlices: (params: SliceAnalyzeParams) => Promise<SliceAnalyzeResult>;
+      batchAnalyzeSlices: (
+        videos: { path: string; id: string; name: string }[],
+        params: Omit<SliceAnalyzeParams, 'filePath'>
+      ) => Promise<BatchSliceGroup[]>;
+      onBatchAnalyzeProgress: (callback: (event: { current: number; total: number }) => void) => void;
       getDefaultDownloadPath: () => Promise<string>;
       selectOutputDir: () => Promise<string | null>;
       executeExport: (params: ExportExecuteParams) => Promise<{ success: boolean }>;

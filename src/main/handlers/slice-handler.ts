@@ -3,6 +3,8 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { getFfprobePath } from '../utils/ffprobe-helper';
 import type { SliceAnalyzeParams, SliceAnalyzeResult, VideoSegment } from '../../types/slice';
+import type { BatchSliceGroup } from '../../types/batch';
+import { TaskQueue } from '../../utils/taskQueue';
 
 // 配置 ffprobe 路径
 const ffprobePath = getFfprobePath();
@@ -136,66 +138,131 @@ function sliceBySize(
 }
 
 /**
+ * 批量视频切片分析处理器
+ */
+async function handleBatchAnalyze(
+  event: Electron.IpcMainInvokeEvent,
+  videos: { path: string; id: string; name: string }[],
+  params: Omit<SliceAnalyzeParams, 'filePath'>
+): Promise<BatchSliceGroup[]> {
+  console.log('[SliceHandler] 批量分析请求:', videos.length, '个视频');
+
+  const results: BatchSliceGroup[] = [];
+  const queue = new TaskQueue<BatchSliceGroup>(
+    (current, total) => {
+      event.sender.send('batch-analyze-progress', { current, total });
+    },
+    (taskId, result) => {
+      results.push(result);
+    }
+  );
+
+  // 将所有视频分析任务入队
+  for (const video of videos) {
+    queue.enqueue({
+      id: video.id,
+      execute: async () => {
+        const fullParams: SliceAnalyzeParams = {
+          ...params,
+          filePath: video.path
+        };
+
+        const result = await analyzeVideoSlices(fullParams);
+
+        return {
+          videoId: video.id,
+          videoPath: video.path,
+          videoName: video.name,
+          slices: result.segments.map((slice, index) => ({
+            id: `${video.id}-slice-${index}`,
+            videoId: video.id,
+            label: slice.label,
+            startTime: slice.startTime,
+            endTime: slice.endTime,
+            isActive: true,
+            metadata: {
+              duration: slice.endTime - slice.startTime
+            }
+          })),
+          createdAt: Date.now()
+        };
+      }
+    });
+  }
+
+  // 串行执行所有任务
+  await queue.start();
+
+  console.log('[SliceHandler] 批量分析完成:', results.length, '个结果');
+  return results;
+}
+
+/**
+ * 单视频切片分析（内部函数）
+ */
+async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> {
+  const { filePath, mode, targetValue, useOverlapHandles, overlapDuration } = params;
+
+  // 参数验证
+  if (targetValue <= 0) {
+    throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
+  }
+  if (overlapDuration < 0 || overlapDuration > 5) {
+    throw new Error(`交叠缓冲时长必须在 0-5 秒之间，当前值: ${overlapDuration}`);
+  }
+
+  // 文件路径验证
+  if (!filePath || !fs.existsSync(filePath)) {
+    throw new Error('文件路径无效或文件不存在');
+  }
+
+  // 获取视频时长
+  const videoDuration = await getVideoDuration(filePath);
+
+  // 合理性检查：避免生成过多片段
+  const estimatedCount = Math.ceil(videoDuration / targetValue);
+  if (estimatedCount > 1000) {
+    throw new Error(`目标值过小，将生成 ${estimatedCount} 个片段（最多支持 1000 个）`);
+  }
+
+  let segments: VideoSegment[];
+
+  if (mode === 'duration') {
+    segments = sliceByDuration(videoDuration, targetValue, useOverlapHandles, overlapDuration);
+  } else {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      throw new Error(`路径不是有效的文件: ${filePath}`);
+    }
+    const fileSizeMB = stats.size / (1024 * 1024);
+    segments = sliceBySize(videoDuration, fileSizeMB, targetValue, useOverlapHandles, overlapDuration);
+  }
+
+  return {
+    segments,
+    totalCount: segments.length,
+    videoDuration,
+  };
+}
+
+/**
  * 注册视频切片计算 IPC Handler
  */
 export function registerSliceHandler() {
+  // 单视频切片分析
   ipcMain.handle('analyze-video-slices', async (_, params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> => {
     try {
       console.log('[SliceHandler] 收到切片分析请求:', params);
-      const { filePath, mode, targetValue, useOverlapHandles, overlapDuration } = params;
-
-      // 参数验证
-      if (targetValue <= 0) {
-        throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
-      }
-      if (overlapDuration < 0 || overlapDuration > 5) {
-        throw new Error(`交叠缓冲时长必须在 0-5 秒之间，当前值: ${overlapDuration}`);
-      }
-
-      // 文件路径验证
-      if (!filePath || !fs.existsSync(filePath)) {
-        throw new Error('文件路径无效或文件不存在');
-      }
-
-      // 获取视频时长
-      const videoDuration = await getVideoDuration(filePath);
-
-      // 合理性检查：避免生成过多片段
-      const estimatedCount = Math.ceil(videoDuration / targetValue);
-      if (estimatedCount > 1000) {
-        throw new Error(`目标值过小，将生成 ${estimatedCount} 个片段（最多支持 1000 个）`);
-      }
-
-      let segments: VideoSegment[];
-
-      if (mode === 'duration') {
-        segments = sliceByDuration(videoDuration, targetValue, useOverlapHandles, overlapDuration);
-      } else {
-        // 按大小切分需要先获取文件大小
-        let stats;
-        try {
-          stats = fs.statSync(filePath);
-          if (!stats.isFile()) {
-            throw new Error(`路径不是有效的文件: ${filePath}`);
-          }
-        } catch (statError) {
-          throw new Error(`无法读取文件信息: ${statError instanceof Error ? statError.message : String(statError)}`);
-        }
-        const fileSizeMB = stats.size / (1024 * 1024);
-        segments = sliceBySize(videoDuration, fileSizeMB, targetValue, useOverlapHandles, overlapDuration);
-      }
-
-      console.log('[SliceHandler] 生成切片数量:', segments.length);
-      console.log('[SliceHandler] 前 3 个切片:', segments.slice(0, 3));
-
-      return {
-        segments,
-        totalCount: segments.length,
-        videoDuration,
-      };
+      const result = await analyzeVideoSlices(params);
+      console.log('[SliceHandler] 生成切片数量:', result.segments.length);
+      console.log('[SliceHandler] 前 3 个切片:', result.segments.slice(0, 3));
+      return result;
     } catch (error) {
       console.error('切片分析失败:', error);
       throw error;
     }
   });
+
+  // 批量视频切片分析
+  ipcMain.handle('batch-analyze-slices', handleBatchAnalyze);
 }

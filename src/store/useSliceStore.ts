@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { VideoSegment } from '../types/slice';
 
 export interface VideoSliceGroup {
@@ -14,6 +14,18 @@ export const useSliceStore = defineStore('slice', () => {
   const batchSliceGroups = ref<VideoSliceGroup[]>([]);
   const activeSliceId = ref<string | null>(null);
   const isAnalyzing = ref(false);
+
+  const allSlices = computed(() => {
+    if (batchSliceGroups.value.length > 0) {
+      return batchSliceGroups.value.flatMap(g => g.segments);
+    }
+    return previewSlices.value;
+  });
+
+  const activeSlice = computed(() => {
+    if (!activeSliceId.value) return null;
+    return allSlices.value.find(s => s.id === activeSliceId.value) || null;
+  });
 
   function setPreviewSlices(segments: VideoSegment[]) {
     previewSlices.value = segments;
@@ -44,16 +56,30 @@ export const useSliceStore = defineStore('slice', () => {
     isAnalyzing.value = status;
   }
 
+  function clearBatchMode() {
+    batchSliceGroups.value = [];
+    activeSliceId.value = null;
+  }
+
+  function clearPreviewMode() {
+    previewSlices.value = [];
+    activeSliceId.value = null;
+  }
+
   return {
     previewSlices,
     batchSliceGroups,
     activeSliceId,
     isAnalyzing,
+    allSlices,
+    activeSlice,
     setPreviewSlices,
     setBatchSliceGroups,
     toggleGroupExpanded,
     setActiveSlice,
     clearSlices,
     setAnalyzing,
+    clearBatchMode,
+    clearPreviewMode,
   };
 });

@@ -1,5 +1,10 @@
 <template>
   <div class="export-tab">
+    <!-- 批量模式：显示批量导出队列 -->
+    <BatchExportQueue v-if="isBatchMode" />
+
+    <!-- 单选模式：显示原有导出界面 -->
+    <template v-else>
     <!-- 前置审查区 -->
     <div class="export-preview">
       <h3 class="section-title vt-title">待导出任务</h3>
@@ -133,6 +138,7 @@
         </span>
       </button>
     </div>
+    </template>
   </div>
 </template>
 
@@ -140,10 +146,15 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useExportStore } from '../store/useExportStore';
+import { useVideoStore } from '../store/useVideoStore';
 import type { ExportTaskStatus } from '../types/export';
+import BatchExportQueue from './export/BatchExportQueue.vue';
 
 const exportStore = useExportStore();
 const { pendingTasks, queueItems, hasPendingTasks, isExporting } = storeToRefs(exportStore);
+
+const videoStore = useVideoStore();
+const { isBatchMode } = storeToRefs(videoStore);
 
 // 导出配置
 const exportConfig = ref({

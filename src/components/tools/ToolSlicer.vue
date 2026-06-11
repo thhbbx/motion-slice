@@ -86,7 +86,7 @@
         :disabled="!canAnalyze"
         @click="handleAnalyze"
       >
-        <span v-if="!isAnalyzing">生成切片预览</span>
+        <span v-if="!isAnalyzing">{{ isBatchMode ? '应用规则并批量扫描' : '生成切片预览' }}</span>
         <span v-else class="loading-text">
           <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
             <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
@@ -96,8 +96,8 @@
       </button>
     </div>
 
-    <!-- 列表区 -->
-    <div class="slicer-list">
+    <!-- 单选模式：显示切片预览列表 -->
+    <div v-if="!isBatchMode" class="slicer-list">
       <div class="list-header">
         <h3 class="section-title vt-title">切片预览</h3>
         <span v-if="selectedVideos.length <= 1 && previewSlices.length > 0" class="slice-count vt-secondary">
@@ -150,6 +150,9 @@
         </div>
       </div>
     </div>
+
+    <!-- 批量模式：显示策略汇总卡片 -->
+    <BatchPolicyCard v-else :mode="mode" :target-value="targetValue" />
   </div>
 </template>
 
@@ -161,12 +164,13 @@ import { useSliceStore } from '../../store/useSliceStore';
 import { useExportStore } from '../../store/useExportStore';
 import type { VideoSegment, SliceAnalyzeParams } from '../../types/slice';
 import type { ExportTask } from '../../types/export';
+import BatchPolicyCard from '../workspace/BatchPolicyCard.vue';
 
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
 const exportStore = useExportStore();
 
-const { activeVideo, selectedVideos } = storeToRefs(videoStore);
+const { activeVideo, selectedVideos, isBatchMode } = storeToRefs(videoStore);
 const { previewSlices, batchSliceGroups, activeSliceId, isAnalyzing } = storeToRefs(sliceStore);
 
 // 表单状态

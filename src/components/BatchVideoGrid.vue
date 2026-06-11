@@ -26,15 +26,24 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 批量切片预览（主从表） -->
+    <BatchSlicePreview v-if="batchSliceGroups.length > 0" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { useVideoStore } from '../store/useVideoStore';
 import type { FileNode } from '../types/file-tree';
+import BatchSlicePreview from './workspace/BatchSlicePreview.vue';
 
 defineProps<{
   videos: FileNode[];
 }>();
+
+const videoStore = useVideoStore();
+const { batchSliceGroups } = storeToRefs(videoStore);
 </script>
 
 <style scoped>
@@ -61,8 +70,15 @@ defineProps<{
 }
 
 .grid-table {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
+}
+
+.batch-slice-preview {
   flex: 1;
   overflow-y: auto;
+  padding: var(--vt-space-4);
 }
 
 table {

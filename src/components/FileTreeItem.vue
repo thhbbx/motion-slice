@@ -5,6 +5,7 @@
       class="tree-node"
       :class="{
         'tree-node-selected': isSelected,
+        'tree-node-focused': isFocused,
         'tree-node-directory': node.type === 'directory',
       }"
       :style="{ paddingLeft: `calc(var(--vt-space-4) * ${depth})` }"
@@ -128,6 +129,11 @@ const isSelected = computed(() => {
          videoStore.selectedVideos.some(v => v.id === props.node.id);
 });
 
+const isFocused = computed(() => {
+  return props.node.type === 'file' &&
+         videoStore.focusedVideo?.id === props.node.id;
+});
+
 const isExpanded = computed(() => {
   return props.node.type === 'directory' && fileTreeStore.isDirectoryExpanded(props.node.id);
 });
@@ -136,15 +142,13 @@ function handleNodeClick(event: MouseEvent) {
   if (props.node.type === 'directory') {
     fileTreeStore.toggleDirectory(props.node.id);
   } else {
-    if (event.ctrlKey || event.metaKey || event.shiftKey) {
-      videoStore.toggleVideoSelection(props.node);
-    } else {
-      videoStore.setSelectedVideos([props.node]);
-    }
+    // 整行点击：设置聚焦视频（不影响多选状态）
+    videoStore.setFocusedVideo(props.node);
   }
 }
 
 function handleCheckboxClick() {
+  // 多选框：切换选中状态
   videoStore.toggleVideoSelection(props.node);
 }
 </script>
@@ -183,6 +187,11 @@ function handleCheckboxClick() {
   bottom: var(--vt-space-1);
   width: 2px;
   background: var(--vt-primary);
+}
+
+.tree-node-focused {
+  background: rgba(139, 92, 246, 0.15);
+  border-left: 2px solid var(--vt-primary);
 }
 
 .tree-icon-arrow {
