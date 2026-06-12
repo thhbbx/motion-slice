@@ -142,7 +142,9 @@ function handleNodeClick(event: MouseEvent) {
   if (props.node.type === 'directory') {
     fileTreeStore.toggleDirectory(props.node.id);
   } else {
-    // 整行点击：设置聚焦视频（不影响多选状态）
+    // 整行点击：单选该视频（清空其他选择）
+    videoStore.setSelectedVideos([props.node]);
+    // 同时设置为聚焦视频
     videoStore.setFocusedVideo(props.node);
   }
 }
