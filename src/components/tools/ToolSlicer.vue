@@ -225,21 +225,13 @@ async function handleAnalyze() {
       params.filePath = videos[0].path;
       const result = await window.motionSlice.analyzeSlices(params);
       sliceStore.setPreviewSlices(result.segments);
-      sliceStore.setBatchSliceGroups([]);
+      videoStore.setBatchSliceGroups([]);
     } else {
+      // 批量模式：调用批量分析 API
       sliceStore.setPreviewSlices([]);
-      const groups: any[] = [];
-      for (const video of videos) {
-        params.filePath = video.path;
-        const result = await window.motionSlice.analyzeSlices(params);
-        groups.push({
-          videoId: video.id,
-          videoName: video.name,
-          segments: result.segments,
-          isExpanded: false,
-        });
-      }
-      sliceStore.setBatchSliceGroups(groups);
+      const videoList = videos.map(v => ({ path: v.path, id: v.id, name: v.name }));
+      const groups = await window.motionSlice.batchAnalyzeSlices(videoList, params);
+      videoStore.setBatchSliceGroups(groups);
     }
   } catch (error) {
     console.error('切片分析失败:', error);

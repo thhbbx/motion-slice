@@ -34,14 +34,14 @@
       <div class="inspector-content">
         <!-- 属性 Tab -->
         <div v-if="activeTab === 'properties'" class="tab-pane">
-          <div v-if="activeVideo" class="properties-section">
+          <div v-if="displayVideo" class="properties-section">
             <!-- 文件名（大字号，粗字重） -->
             <div class="file-header">
               <div class="file-name-row">
-                <div class="file-name">{{ activeVideo.name }}</div>
+                <div class="file-name">{{ displayVideo.name }}</div>
               </div>
               <!-- 路径（小字号，弱化，自动换行） -->
-              <div class="file-path vt-muted">{{ activeVideo.path }}</div>
+              <div class="file-path vt-muted">{{ displayVideo.path }}</div>
             </div>
 
             <!-- 分割线 -->
@@ -52,56 +52,56 @@
               <div class="spec-row">
                 <span class="spec-label vt-secondary">文件大小</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ formatFileSize(activeVideo.metadata?.size) }}
+                  {{ formatFileSize(displayVideo.metadata?.size) }}
                 </span>
                 <span v-else class="skeleton-block skeleton-size"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">时长</span>
                 <span v-if="!isFetchingMetadata" class="spec-value vt-timecode">
-                  {{ activeVideo.metadata?.duration || '--' }}
+                  {{ displayVideo.metadata?.duration || '--' }}
                 </span>
                 <span v-else class="skeleton-block skeleton-duration"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">分辨率</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ activeVideo.metadata?.resolution || '--' }}
+                  {{ displayVideo.metadata?.resolution || '--' }}
                 </span>
                 <span v-else class="skeleton-block skeleton-resolution"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">帧率</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ formatFrameRate(activeVideo.metadata) }}
+                  {{ formatFrameRate(displayVideo.metadata) }}
                 </span>
                 <span v-else class="skeleton-block skeleton-fps"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">视频编码</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ activeVideo.metadata?.videoCodec || '--' }}
+                  {{ displayVideo.metadata?.videoCodec || '--' }}
                 </span>
                 <span v-else class="skeleton-block skeleton-codec"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">音频编码</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ activeVideo.metadata?.audioCodec || '--' }}
+                  {{ displayVideo.metadata?.audioCodec || '--' }}
                 </span>
                 <span v-else class="skeleton-block skeleton-codec"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">码率</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ formatBitrate(activeVideo.metadata) }}
+                  {{ formatBitrate(displayVideo.metadata) }}
                 </span>
                 <span v-else class="skeleton-block skeleton-bitrate"></span>
               </div>
               <div class="spec-row">
                 <span class="spec-label vt-secondary">创建时间</span>
                 <span v-if="!isFetchingMetadata" class="spec-value">
-                  {{ formatCreatedTime(activeVideo.metadata) }}
+                  {{ formatCreatedTime(displayVideo.metadata) }}
                 </span>
                 <span v-else class="skeleton-block skeleton-time"></span>
               </div>
@@ -144,7 +144,7 @@
 
         <!-- 导出 Tab -->
         <div v-else-if="activeTab === 'export'" class="tab-pane">
-          <ExportTab v-if="activeVideo" />
+          <ExportTab v-if="activeVideo || isBatchMode" />
 
           <div v-else class="empty-state">
             <div class="empty-icon">📦</div>
@@ -159,7 +159,7 @@
         <button
           v-if="activeTab === 'properties'"
           class="vt-button-ghost action-button action-button-fusion"
-          :disabled="!activeVideo"
+          :disabled="!displayVideo"
           @click="handleShowInFolder"
         >
           <svg class="button-icon button-icon-windows" width="16" height="16">
@@ -180,7 +180,10 @@ import ToolSlicer from './tools/ToolSlicer.vue';
 import ExportTab from './ExportTab.vue';
 
 const videoStore = useVideoStore();
-const { activeVideo, isFetchingMetadata, selectedVideos } = storeToRefs(videoStore);
+const { activeVideo, focusedVideo, isBatchMode, isFetchingMetadata, selectedVideos } = storeToRefs(videoStore);
+
+// 属性面板显示：优先使用 focusedVideo，fallback 到 activeVideo
+const displayVideo = computed(() => focusedVideo.value || activeVideo.value);
 
 const activeTab = ref<'properties' | 'workbench' | 'export'>('properties');
 
@@ -200,10 +203,10 @@ const toolOptions = [
  * 在资源管理器中显示当前视频文件
  */
 function handleShowInFolder() {
-  if (!activeVideo.value) return;
+  if (!displayVideo.value) return;
 
   try {
-    window.motionSlice.showItemInFolder(activeVideo.value.path);
+    window.motionSlice.showItemInFolder(displayVideo.value.path);
   } catch (error) {
     console.error('打开资源管理器失败:', error);
   }
