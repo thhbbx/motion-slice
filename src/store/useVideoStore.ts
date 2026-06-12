@@ -134,14 +134,6 @@ export const useVideoStore = defineStore('video', () => {
     console.log(`[VideoStore] 切片 ${sliceId} 状态: ${slice.isActive ? '启用' : '禁用'}`);
   }
 
-  function play() {
-    isPlaying.value = true;
-  }
-
-  function pause() {
-    isPlaying.value = false;
-  }
-
   return {
     selectedVideos: readonly(selectedVideos),
     focusedVideo: readonly(focusedVideo),

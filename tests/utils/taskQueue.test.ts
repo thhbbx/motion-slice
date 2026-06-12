@@ -32,8 +32,8 @@ describe('TaskQueue', () => {
     const progressSpy = vi.fn();
     const queue = new TaskQueue<void>(progressSpy);
 
-    queue.enqueue({ id: 't1', execute: async () =>  });
-    queue.enqueue({ id: 't2', execute: async () => {} });
+    queue.enqueue({ id: 't1', execute: async () => { return; } });
+    queue.enqueue({ id: 't2', execute: async () => { return; } });
 
     await queue.start();
 

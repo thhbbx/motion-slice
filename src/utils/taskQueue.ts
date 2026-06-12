@@ -30,7 +30,9 @@ export class TaskQueue<T> {
     let current = 0;
 
     while (this.queue.length > 0) {
-      const task = this.queue.shift()!;
+      const task = this.queue.shift();
+      if (!task) break;
+
       current++;
 
       console.log(`[TaskQueue] 执行任务 ${current}/${total}: ${task.id}`);
