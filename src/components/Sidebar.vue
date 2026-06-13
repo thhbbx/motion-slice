@@ -124,10 +124,11 @@ async function handleImport() {
     };
 
     // ========== 第二步：显示 Loading（在 IPC 调用前）==========
-    // 注意：这会在文件选择器弹出时也显示 Loading，但这是必要的
-    // 因为主进程的扫描发生在 IPC 内部，渲染进程无法在中间插入状态
+    // 注意：由于主进程的扫描发生在 IPC 内部（dialog + scan 一体），
+    // 渲染进程无法在"选择文件"和"扫描文件"之间插入状态变更。
+    // 因此使用通用的"正在导入..."提示，覆盖整个流程。
     console.log('[Sidebar] 显示 Loading 遮罩');
-    appStore.startImporting('正在选择文件...');
+    appStore.startImporting('正在导入视频，请稍候...');
 
     // 强制让出主线程给渲染管线
     console.log('[Sidebar] 等待渲染管线...');
