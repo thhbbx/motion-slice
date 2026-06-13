@@ -288,11 +288,18 @@ function calculateMajorTickInterval(totalDuration: number): number {
 
 // 步骤 3：计算时间轴刻度
 const timelineTicks = computed<TimelineTick[]>(() => {
-  if (duration.value === 0) return [];
+  console.log('[Timeline] 计算刻度尺 - duration:', duration.value);
+
+  if (duration.value === 0) {
+    console.log('[Timeline] Duration 为 0，刻度尺为空');
+    return [];
+  }
 
   const ticks: TimelineTick[] = [];
   const majorInterval = calculateMajorTickInterval(duration.value);
   const minorInterval = majorInterval / 4;
+
+  console.log('[Timeline] 刻度间隔 - major:', majorInterval, 'minor:', minorInterval);
 
   const tickCount = Math.ceil(duration.value / minorInterval) + 1;
   for (let i = 0; i < tickCount; i++) {
@@ -312,6 +319,8 @@ const timelineTicks = computed<TimelineTick[]>(() => {
       label: isMajor ? formatRulerLabel(currentTime) : '',
     });
   }
+
+  console.log('[Timeline] 生成刻度数量:', ticks.length, '主刻度数量:', ticks.filter(t => t.isMajor).length);
 
   return ticks;
 });
@@ -574,15 +583,27 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 
 // 监听 duration 变化，确保元数据加载完成后触发缩略图生成
 watch(duration, async (newDuration, oldDuration) => {
+  console.log('[Timeline] Duration watch 触发 -', 'old:', oldDuration, 'new:', newDuration);
+
   // 只有当 duration 真正变化（从 0 变为有效值，或切换到不同视频）时才触发
   // 避免相同 duration 的重复触发
-  if (newDuration === oldDuration) return;
+  if (newDuration === oldDuration) {
+    console.log('[Timeline] Duration 未变化，跳过');
+    return;
+  }
 
   // 当 duration 变化且大于 0，且当前有选中视频，且缩略图为空时触发
   // 添加 isThumbnailsLoading 检查避免重复触发
   if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0 && !isThumbnailsLoading.value) {
     console.log(`[Timeline] Duration 变化: ${oldDuration} -> ${newDuration}，触发缩略图生成`);
     await generateThumbnails(activeVideo.value.path);
+  } else {
+    console.log('[Timeline] Duration 变化但不触发生成 -', {
+      'newDuration > 0': newDuration > 0,
+      'hasActiveVideo': !!activeVideo.value?.path,
+      'thumbnails.length === 0': thumbnails.value.length === 0,
+      '!isThumbnailsLoading': !isThumbnailsLoading.value
+    });
   }
 }, { flush: 'post' });
 </script>
