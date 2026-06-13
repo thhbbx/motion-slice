@@ -32,14 +32,14 @@ const createWindow = () => {
   // 加载应用的 index.html
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    // 仅在开发模式下自动打开开发者工具
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
+    // 生产模式：默认不打开开发者工具，用户可按 F12 手动打开
   }
-
-  // 打开开发者工具
-  mainWindow.webContents.openDevTools();
 
   // 注册导出 Handler
   registerExportHandler(mainWindow);
