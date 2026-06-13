@@ -282,8 +282,18 @@ function calculateMajorTickInterval(totalDuration: number): number {
     }
   }
 
-  // 边界处理：视频过短或过长时返回首尾候选值
-  return totalDuration < 10 ? candidates[0] : candidates[candidates.length - 1];
+  // 边界处理：找到最接近的步长
+  // 如果所有候选步长都太小（count > 20），返回最大的
+  // 如果所有候选步长都太大（count < 10），返回最小的能产生合理刻度数的步长
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const count = totalDuration / candidates[i];
+    if (count >= 5) {  // 至少 5 个主刻度
+      return candidates[i];
+    }
+  }
+
+  // 极短视频（< 5 秒），使用 1 秒间隔
+  return candidates[0];
 }
 
 // 步骤 3：计算时间轴刻度
@@ -585,10 +595,11 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 watch(duration, async (newDuration, oldDuration) => {
   console.log('[Timeline] Duration watch 触发 -', 'old:', oldDuration, 'new:', newDuration);
 
-  // 只有当 duration 真正变化（从 0 变为有效值，或切换到不同视频）时才触发
-  // 避免相同 duration 的重复触发
-  if (newDuration === oldDuration) {
-    console.log('[Timeline] Duration 未变化，跳过');
+  // 只有当 duration 真正变化时才触发
+  // 使用 0.1 秒的容差避免浮点数精度差异（215 vs 215.04）导致重复触发
+  const TOLERANCE = 0.1;
+  if (Math.abs(newDuration - oldDuration) < TOLERANCE) {
+    console.log('[Timeline] Duration 变化小于容差 0.1s，跳过');
     return;
   }
 
