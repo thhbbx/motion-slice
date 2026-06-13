@@ -927,9 +927,11 @@ watch(duration, async (newDuration) => {
   transition: all 0.18s ease;
   box-sizing: border-box;
   z-index: 1;
-  /* 物理缝隙：通过内缩实现切片间 2px 间距 */
+  /* 物理缝隙：通过 padding 实现切片间 2px 间距 */
   padding: 2px 1px;
+  /* 整体圆角约束：限制内部所有子元素不越界 */
   border-radius: 4px;
+  overflow: hidden;
 }
 
 .slice-block:hover {
@@ -942,48 +944,59 @@ watch(duration, async (newDuration) => {
   z-index: 20;
 }
 
-/* 切片主体区域 */
+/* 统一外壳：包裹所有内部元素，提供整体形态 */
+.slice-block::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 1px;
+  right: 1px;
+  bottom: 2px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  z-index: 5;
+  transition: box-shadow 0.18s ease;
+}
+
+.slice-block:hover::before {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.slice-block.active::before {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+/* 切片主体区域：纯粹的内部填充，无边框圆角 */
 .slice-body {
   height: 100%;
   background: rgba(88, 101, 242, 0.4);
   backdrop-filter: blur(4px);
-  border-top: 1px solid rgba(139, 92, 246, 0.3);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
   display: flex;
   align-items: center;
   overflow: hidden;
-  transition: all 0.18s ease;
+  transition: background 0.18s ease;
   box-sizing: border-box;
-  /* 积木质感：微圆角 + 内发光边框 */
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  /* 主体层级：介于缓冲带和文本之间 */
   position: relative;
   z-index: 2;
+  /* 边界约束：顶部/底部留白由父容器 padding 控制，不需要独立边框 */
 }
 
 .slice-block:hover .slice-body {
   background: rgba(88, 101, 242, 0.55);
-  border-top-color: rgba(139, 92, 246, 0.5);
-  border-bottom-color: rgba(139, 92, 246, 0.5);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .slice-block.active .slice-body {
   background: rgba(88, 101, 242, 0.7);
-  border-top: 1px solid rgba(139, 92, 246, 0.8);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.8);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
-/* 交叠缓冲带：通用样式 */
+/* 交叠缓冲带：纯粹的内部装饰层，无边框圆角 */
 .slice-overlap-handle {
   height: 100%;
   pointer-events: none;
   box-sizing: border-box;
   position: relative;
   z-index: 1; /* 斜纹背景层级：低于文本 */
-  overflow: hidden; /* 严格限制斜纹背景不越界 */
 }
 
 /* 左侧头部缓冲带（斜纹区域） */
@@ -997,10 +1010,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.15);
-  border-left: 2px solid rgba(139, 92, 246, 0.9);
-  border-top: 1px solid rgba(139, 92, 246, 0.2);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 4px 0 0 4px; /* 匹配父容器圆角 */
 }
 
 .slice-block:hover .slice-overlap-left {
@@ -1013,7 +1022,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.25);
-  border-left-color: rgba(139, 92, 246, 1);
 }
 
 .slice-block.active .slice-overlap-left {
@@ -1026,9 +1034,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.35);
-  border-left-color: rgba(139, 92, 246, 1);
-  border-top-color: rgba(139, 92, 246, 0.4);
-  border-bottom-color: rgba(139, 92, 246, 0.4);
 }
 
 /* 右侧尾部缓冲带（斜纹区域） */
@@ -1042,10 +1047,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.15);
-  border-right: 2px solid rgba(139, 92, 246, 0.9);
-  border-top: 1px solid rgba(139, 92, 246, 0.2);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 0 4px 4px 0; /* 匹配父容器圆角 */
 }
 
 .slice-block:hover .slice-overlap-right {
@@ -1058,7 +1059,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.25);
-  border-right-color: rgba(139, 92, 246, 1);
 }
 
 .slice-block.active .slice-overlap-right {
@@ -1071,9 +1071,6 @@ watch(duration, async (newDuration) => {
       transparent 6px
     ),
     rgba(88, 101, 242, 0.35);
-  border-right-color: rgba(139, 92, 246, 1);
-  border-top-color: rgba(139, 92, 246, 0.4);
-  border-bottom-color: rgba(139, 92, 246, 0.4);
 }
 
 .slice-block-label {
