@@ -389,7 +389,7 @@ async function seekAndCapture(video: HTMLVideoElement, targetTime: number, taskI
 }
 
 // 任务 4-6：等待视频元数据加载完成（带超时保护）
-async function waitForMetadata(video: HTMLVideoElement): Promise<void> {
+async function waitForMetadata(video: HTMLVideoElement, videoPath: string): Promise<void> {
   console.log('[Timeline] 开始等待 Metadata...');
 
   // 如果已经加载完元数据，直接返回
@@ -435,7 +435,13 @@ async function waitForMetadata(video: HTMLVideoElement): Promise<void> {
       timeoutId = window.setTimeout(() => {
         if (isResolved) return;
         isResolved = true;
-        console.error('[Timeline] Metadata 加载超时 (5000ms)');
+        console.error(
+          `[Timeline] 🔴 严重：元数据加载超时 (5000ms)！\n` +
+          `视频路径：${videoPath}\n` +
+          `如果路径正确，该视频极可能是 Electron Chromium 不支持的编码格式！\n` +
+          `不支持的格式包括：H.265/HEVC, ProRes, AV1 (部分)。\n` +
+          `建议：使用 FFmpeg 转码为 H.264 (AVC) 格式。`
+        );
         reject(new Error('Metadata loading timeout after 5000ms'));
       }, 5000);
     })
@@ -457,15 +463,20 @@ async function generateThumbnails(videoPath: string) {
   thumbProgress.value = 0;
 
   try {
-    // 设置视频源
-    video.src = videoPath;
+    // 统一本地协议契约：强制使用 file:// 协议，避免路径解析异常
+    const safeVideoUrl = videoPath.startsWith('file://')
+      ? videoPath
+      : `file:///${videoPath.replace(/\\/g, '/')}`;
+
+    console.log('[Timeline] 安全 URL:', safeVideoUrl);
+    video.src = safeVideoUrl;
 
     // 【任务 1】强制媒体引擎加载
     console.log('[Timeline] 强制调用 video.load()');
     video.load();
 
     // 等待视频元数据加载完成（修复首次加载竞态问题）
-    await waitForMetadata(video);
+    await waitForMetadata(video, videoPath);
 
     // 检查任务是否已被替代
     if (taskId !== currentGenerationId.value) {
@@ -556,22 +567,20 @@ watch(activeVideo, async (newVideo, oldVideo) => {
     return;
   }
 
-  // 等待 DOM 渲染
-  await nextTick();
-
+  // 彻底消灭 DOM 竞态：flush: 'post' 确保 DOM 已 100% 挂载
   // 如果 duration 已经有值，且缩略图为空，且 DOM 元素已就绪，立即生成
   if (duration.value > 0 && thumbnails.value.length === 0 && hiddenVideoElement.value && hiddenCanvasElement.value) {
     await generateThumbnails(newVideo.path);
   }
-}, { immediate: true });
+}, { immediate: true, flush: 'post' });
 
 // 监听 duration 变化，确保元数据加载完成后触发缩略图生成
 watch(duration, async (newDuration) => {
   // 当 duration 变化且大于 0，且当前有选中视频，且缩略图为空时触发
   if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0) {
-    await nextTick();
     await generateThumbnails(activeVideo.value.path);
   }
+}, { flush: 'post' });
 });
 </script>
 
