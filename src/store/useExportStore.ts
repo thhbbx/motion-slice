@@ -76,6 +76,23 @@ export const useExportStore = defineStore('export', () => {
   }
 
   /**
+   * 按工具 ID 和源文件路径移除任务（靶向清理）
+   * @param toolId 工具标识符（如 'slicer'）
+   * @param sourceFilePath 源文件路径
+   */
+  function removeTasksBySource(toolId: string, sourceFilePath: string) {
+    const before = pendingTasks.value.length;
+    pendingTasks.value = pendingTasks.value.filter(task => {
+      // 保留不匹配的任务
+      return !(task.toolId === toolId && task.payload?.sourceFilePath === sourceFilePath);
+    });
+    const removed = before - pendingTasks.value.length;
+    if (removed > 0) {
+      console.log(`[ExportStore] 已移除 ${removed} 个任务 (toolId=${toolId}, source=${sourceFilePath})`);
+    }
+  }
+
+  /**
    * 重置工作区状态（导入新视频时调用）
    */
   function reset() {
@@ -93,6 +110,7 @@ export const useExportStore = defineStore('export', () => {
     // Actions
     upsertTask,
     removeTask,
+    removeTasksBySource,
     clearTasks,
     updateQueueProgress,
     setQueueStatus,
