@@ -30,6 +30,12 @@ watch(() => appStore.isImporting, (newVal) => {
   }
 });
 
+// 调试：监听消息变化
+watch(() => appStore.importingMessage, (newVal, oldVal) => {
+  console.log('[GlobalLoading] 消息变化: "%s" → "%s"', oldVal, newVal);
+  console.log('[GlobalLoading] 当前显示的消息:', newVal);
+});
+
 function handleBackdropClick() {
   // 防止用户点击背景关闭（导入过程不可中断）
   console.log('[GlobalLoading] 导入过程中，请稍候...');

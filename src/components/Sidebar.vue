@@ -144,10 +144,13 @@ async function handleImport() {
     }
 
     // ========== 第五步：更新 Loading 消息 ==========
+    console.log('[Sidebar] 更新 Loading 消息为："正在重置工作区并更新文件..."');
     appStore.startImporting('正在重置工作区并更新文件...');
 
-    // 再次让出主线程
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // 再次让出主线程，确保消息更新被渲染
+    console.log('[Sidebar] 等待消息更新渲染...');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('[Sidebar] 消息更新完成，开始执行重置');
 
     // ========== 第六步：确认执行（The Point of No Return）==========
     // 只有在确切拿到有效文件且 Loading 已绘制后，才执行破坏性重置

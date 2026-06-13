@@ -14,9 +14,13 @@ export const useAppStore = defineStore('app', () => {
    * 开始导入（显示全局加载遮罩）
    */
   function startImporting(message = '正在解析媒体资产...') {
+    const oldMessage = importingMessage.value;
     isImporting.value = true;
     importingMessage.value = message;
     console.log('[AppStore] 开始全局加载:', message);
+    if (oldMessage !== message) {
+      console.log('[AppStore] 消息已更新: "%s" → "%s"', oldMessage, message);
+    }
   }
 
   /**
