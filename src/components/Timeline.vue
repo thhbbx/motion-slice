@@ -924,13 +924,18 @@ watch(duration, async (newDuration) => {
   height: 100%;
   display: flex;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: all 0.18s ease;
   box-sizing: border-box;
   z-index: 1;
+  /* 物理缝隙：通过内缩实现切片间 2px 间距 */
+  padding: 2px 1px;
+  border-radius: 4px;
 }
 
 .slice-block:hover {
   z-index: 10;
+  /* 交互反馈：提亮 15% */
+  filter: brightness(1.15);
 }
 
 .slice-block.active {
@@ -947,20 +952,25 @@ watch(duration, async (newDuration) => {
   display: flex;
   align-items: center;
   overflow: hidden;
-  transition: all 0.16s ease;
+  transition: all 0.18s ease;
   box-sizing: border-box;
+  /* 积木质感：微圆角 + 内发光边框 */
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .slice-block:hover .slice-body {
   background: rgba(88, 101, 242, 0.55);
   border-top-color: rgba(139, 92, 246, 0.5);
   border-bottom-color: rgba(139, 92, 246, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .slice-block.active .slice-body {
   background: rgba(88, 101, 242, 0.7);
   border-top: 1px solid rgba(139, 92, 246, 0.8);
   border-bottom: 1px solid rgba(139, 92, 246, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 /* 交叠缓冲带：通用样式 */
