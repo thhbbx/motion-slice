@@ -15,9 +15,20 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue';
 import { useAppStore } from '../store/useAppStore';
 
 const appStore = useAppStore();
+
+// 调试：监听状态变化
+watch(() => appStore.isImporting, (newVal) => {
+  console.log('[GlobalLoading] isImporting 状态变化:', newVal);
+  if (newVal) {
+    console.log('[GlobalLoading] Loading 组件应该显示了');
+  } else {
+    console.log('[GlobalLoading] Loading 组件应该隐藏了');
+  }
+});
 
 function handleBackdropClick() {
   // 防止用户点击背景关闭（导入过程不可中断）

@@ -133,11 +133,15 @@ async function handleImport() {
     }
 
     // ========== 第四步：显示 Loading 遮罩（优先视觉反馈）==========
+    console.log('[Sidebar] 显示 Loading 遮罩');
     appStore.startImporting('正在重置工作区并更新文件...');
 
     // ========== 关键：强制让出主线程给渲染管线 ==========
-    // 使用宏任务（setTimeout）而非微任务（nextTick），确保浏览器有机会执行渲染
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // 使用 50ms 延迟确保浏览器有足够时间完成渲染
+    // 注意：0ms 在某些情况下可能不够，需要更长的宏任务延迟
+    console.log('[Sidebar] 等待渲染管线...');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    console.log('[Sidebar] 渲染完成，开始执行重任务');
 
     // ========== 第五步：确认执行（The Point of No Return）==========
     // 只有在确切拿到有效文件且 Loading 已绘制后，才执行破坏性重置
