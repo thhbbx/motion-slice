@@ -568,16 +568,15 @@ watch(activeVideo, async (newVideo, oldVideo) => {
   }
 
   // 彻底消灭 DOM 竞态：flush: 'post' 确保 DOM 已 100% 挂载
-  // 如果 duration 已经有值，且缩略图为空，且 DOM 元素已就绪，立即生成
-  if (duration.value > 0 && thumbnails.value.length === 0 && hiddenVideoElement.value && hiddenCanvasElement.value) {
-    await generateThumbnails(newVideo.path);
-  }
+  // 注意：这里不主动调用 generateThumbnails，而是等待 duration watch 触发
+  // 避免与 duration watch 重复触发
 }, { immediate: true, flush: 'post' });
 
 // 监听 duration 变化，确保元数据加载完成后触发缩略图生成
 watch(duration, async (newDuration) => {
   // 当 duration 变化且大于 0，且当前有选中视频，且缩略图为空时触发
-  if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0) {
+  // 添加 isThumbnailsLoading 检查避免重复触发
+  if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0 && !isThumbnailsLoading.value) {
     await generateThumbnails(activeVideo.value.path);
   }
 }, { flush: 'post' });
