@@ -581,7 +581,6 @@ watch(duration, async (newDuration) => {
     await generateThumbnails(activeVideo.value.path);
   }
 }, { flush: 'post' });
-});
 </script>
 
 <style scoped>
