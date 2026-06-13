@@ -124,8 +124,6 @@ async function handleImport() {
     };
 
     // ========== 第二步：调用 IPC（包含文件选择器 + 扫描）==========
-    // 注意：showOpenDialog 阻塞期间用户可以取消，但一旦确认，主进程立即开始耗时的扫描
-    // 因此我们接受：Loading 会在文件选择器弹出时短暂显示，但如果用户取消则立即隐藏
     const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
 
     // ========== 第三步：安全拦截（Guard Clause）==========
@@ -134,8 +132,15 @@ async function handleImport() {
       return; // 用户取消，完美保留现有工作区，无任何副作用
     }
 
-    // ========== 第四步：确认执行（The Point of No Return）==========
-    // 只有确认获取到有效文件后，才执行破坏性的重置操作
+    // ========== 第四步：显示 Loading 遮罩（优先视觉反馈）==========
+    appStore.startImporting('正在重置工作区并更新文件...');
+
+    // ========== 关键：强制让出主线程给渲染管线 ==========
+    // 使用宏任务（setTimeout）而非微任务（nextTick），确保浏览器有机会执行渲染
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // ========== 第五步：确认执行（The Point of No Return）==========
+    // 只有在确切拿到有效文件且 Loading 已绘制后，才执行破坏性重置
     console.log('[Sidebar] ========== 开始工作区重置 ==========');
     fileTreeStore.reset();
     videoStore.reset();
@@ -154,6 +159,9 @@ async function handleImport() {
   } catch (error) {
     console.error('[Sidebar] 导入文件失败:', error);
     alert('导入文件失败，请重试');
+  } finally {
+    // 隐藏 Loading 遮罩
+    appStore.finishImporting();
   }
 }
 
