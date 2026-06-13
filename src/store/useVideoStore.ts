@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, readonly, watch } from 'vue';
+import { ref, computed, readonly } from 'vue';
 import type { FileNode } from '../types/file-tree';
 import type { BatchSliceGroup, ExportTask } from '../types/batch';
 import { parseTimecode } from '../utils/timeFormat';
@@ -44,11 +44,22 @@ export const useVideoStore = defineStore('video', () => {
 
   async function setActiveVideo(video: FileNode | null) {
     if (!video) {
+      // 清空选择
+      const wasSingleMode = selectedVideos.value.length === 1;
+      if (wasSingleMode) {
+        await cleanupSingleModeData(selectedVideos.value[0]);
+      }
       selectedVideos.value = [];
       currentTime.value = 0;
       duration.value = 0;
       return;
     }
+
+    // 单选切换：先清理旧数据
+    if (selectedVideos.value.length === 1 && selectedVideos.value[0].id !== video.id) {
+      await cleanupSingleModeData(selectedVideos.value[0]);
+    }
+
     selectedVideos.value = [video];
     currentTime.value = 0;
     // 元数据已在导入时预加载，直接使用
@@ -58,8 +69,42 @@ export const useVideoStore = defineStore('video', () => {
   }
 
   async function setSelectedVideos(videos: FileNode[]) {
+    const wasSingleMode = selectedVideos.value.length === 1;
+    const wasBatchMode = selectedVideos.value.length > 1;
+    const isSingleMode = videos.length === 1;
+    const isBatchMode = videos.length > 1;
+
+    // 场景 1: 单选切换（A → B）
+    if (wasSingleMode && isSingleMode) {
+      const oldVideo = selectedVideos.value[0];
+      const newVideo = videos[0];
+      if (oldVideo.id !== newVideo.id) {
+        await cleanupSingleModeData(oldVideo);
+      }
+    }
+
+    // 场景 2: 单选 → 批量
+    if (wasSingleMode && isBatchMode) {
+      await cleanupSingleModeData(selectedVideos.value[0]);
+    }
+
+    // 场景 3: 批量 → 单选
+    if (wasBatchMode && isSingleMode) {
+      cleanupBatchModeData();
+    }
+
+    // 场景 4: 清空所有选择
+    if (videos.length === 0) {
+      if (wasSingleMode) {
+        await cleanupSingleModeData(selectedVideos.value[0]);
+      } else if (wasBatchMode) {
+        cleanupBatchModeData();
+      }
+    }
+
     selectedVideos.value = videos;
-    if (videos.length === 1) {
+
+    if (isSingleMode) {
       currentTime.value = 0;
       // 元数据已在导入时预加载，直接使用
       if (videos[0].metadata?.duration) {
@@ -71,16 +116,63 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
-  function toggleVideoSelection(video: FileNode) {
+  async function toggleVideoSelection(video: FileNode) {
     const index = selectedVideos.value.findIndex(v => v.id === video.id);
+
     if (index >= 0) {
-      selectedVideos.value.splice(index, 1);
+      // 【取消勾选】- 检测降维转换
+      const currentLength = selectedVideos.value.length;
+      const afterLength = currentLength - 1;
+
+      // 场景 1: Batch -> Single (2 → 1) - 彻底清洗批量数据并初始化单选状态
+      if (currentLength === 2 && afterLength === 1) {
+        cleanupBatchModeData(); // 清空整个批量状态
+        selectedVideos.value.splice(index, 1);
+
+        // 初始化剩余单选视频状态
+        const remainingVideo = selectedVideos.value[0];
+        currentTime.value = 0;
+        if (remainingVideo?.metadata?.duration) {
+          setDuration(parseTimecode(remainingVideo.metadata.duration));
+        }
+
+        console.log(`[VideoStore] 批量降维到单选 (移除: ${video.name}, 激活: ${remainingVideo.name})`);
+      }
+      // 场景 2: Single -> Empty (1 → 0) - 清洗单选数据
+      else if (currentLength === 1 && afterLength === 0) {
+        const removedVideo = selectedVideos.value[0];
+        // 先异步清理再清空状态
+        await cleanupSingleModeData(removedVideo);
+        selectedVideos.value = [];
+        currentTime.value = 0;
+        duration.value = 0;
+        console.log(`[VideoStore] 单选降维到空，已清理数据`);
+      }
+      // 场景 3: Batch -> Batch (>2 → >1) - 靶向剔除
+      else if (afterLength > 1) {
+        const removedVideoId = selectedVideos.value[index].id;
+
+        // 靶向删除该视频的批量切片
+        batchSliceGroups.value = batchSliceGroups.value.filter(
+          group => group.videoId !== removedVideoId
+        );
+
+        selectedVideos.value.splice(index, 1);
+        console.log(`[VideoStore] 取消勾选视频 ${video.name}，已清理批量数据`);
+      }
     } else {
+      // 【勾选】- 仅添加
       selectedVideos.value.push(video);
     }
   }
 
-  function clearActiveVideo() {
+  async function clearActiveVideo() {
+    if (selectedVideos.value.length === 1) {
+      await cleanupSingleModeData(selectedVideos.value[0]);
+    } else if (selectedVideos.value.length > 1) {
+      cleanupBatchModeData();
+    }
+
     selectedVideos.value = [];
     currentTime.value = 0;
     duration.value = 0;
@@ -130,84 +222,38 @@ export const useVideoStore = defineStore('video', () => {
     console.log('[VideoStore] 工作区状态已重置');
   }
 
-  // ========== 状态依赖生命周期管理 ==========
-  // 监听视频选择变化，自动清理孤儿状态
-  watch(
-    () => selectedVideos.value,
-    async (newVideos, oldVideos) => {
-      // 导入其他 Store（使用动态 import 避免循环依赖）
+  /**
+   * 清理单选模式的派生数据
+   */
+  async function cleanupSingleModeData(video: FileNode) {
+    try {
       const { useSliceStore } = await import('./useSliceStore');
       const { useExportStore } = await import('./useExportStore');
+
       const sliceStore = useSliceStore();
       const exportStore = useExportStore();
 
-      // 场景 1: 单视频模式切换（从视频 A 切换到视频 B）
-      if (newVideos.length === 1 && oldVideos && oldVideos.length === 1) {
-        const oldVideoId = oldVideos[0].id;
-        const newVideoId = newVideos[0].id;
+      // 清理切片数据
+      sliceStore.reset();
 
-        if (oldVideoId !== newVideoId) {
-          console.log('[VideoStore] 单视频切换: %s → %s，清理旧数据', oldVideos[0].name, newVideos[0].name);
+      // 靶向清理导出任务：只删除该视频的 slicer 任务
+      exportStore.removeTasksBySource('slicer', video.path);
 
-          // 清理单视频模式的切片数据
-          sliceStore.reset();
+      console.log(`[VideoStore] 已清理单选视频 ${video.name} 的派生数据`);
+    } catch (error) {
+      console.error(`[VideoStore] 清理单选视频 ${video.name} 失败:`, error);
+      // 不阻断主流程，仅记录错误
+    }
+  }
 
-          // 清理单视频模式的导出任务
-          exportStore.clearTasks();
-        }
-      }
-
-      // 场景 2: 从单视频模式切换到批量模式
-      if (newVideos.length > 1 && oldVideos && oldVideos.length === 1) {
-        console.log('[VideoStore] 从单视频切换到批量模式，清理单视频数据');
-        sliceStore.reset();
-        exportStore.clearTasks();
-      }
-
-      // 场景 3: 从批量模式切换到单视频模式
-      if (newVideos.length === 1 && oldVideos && oldVideos.length > 1) {
-        console.log('[VideoStore] 从批量模式切换到单视频，清理批量数据');
-        batchSliceGroups.value = [];
-        exportStore.clearTasks();
-      }
-
-      // 场景 4: 批量模式下取消选择某些视频
-      if (newVideos.length > 1 && oldVideos && oldVideos.length > 1) {
-        const newVideoIds = new Set(newVideos.map(v => v.id));
-        const removedVideos = oldVideos.filter(v => !newVideoIds.has(v.id));
-
-        if (removedVideos.length > 0) {
-          console.log('[VideoStore] 批量模式取消选择 %d 个视频，清理相关数据', removedVideos.length);
-
-          // 从批量切片组中移除
-          const removedVideoIds = new Set(removedVideos.map(v => v.id));
-          batchSliceGroups.value = batchSliceGroups.value.filter(group =>
-            !removedVideoIds.has(group.videoId)
-          );
-
-          // 从导出队列中移除相关任务（通过 videoPath 匹配）
-          const removedVideoPaths = new Set(removedVideos.map(v => v.path));
-          const tasksToRemove = exportStore.pendingTasks.filter(task =>
-            task.payload?.sourceFilePath && removedVideoPaths.has(task.payload.sourceFilePath)
-          );
-
-          tasksToRemove.forEach(task => {
-            exportStore.removeTask(task.id);
-            console.log('[VideoStore] 移除导出任务:', task.id, '来源:', task.title);
-          });
-        }
-      }
-
-      // 场景 5: 清空所有选择
-      if (newVideos.length === 0 && oldVideos && oldVideos.length > 0) {
-        console.log('[VideoStore] 清空所有选择，清理所有数据');
-        sliceStore.reset();
-        exportStore.clearTasks();
-        batchSliceGroups.value = [];
-      }
-    },
-    { deep: true }
-  );
+  /**
+   * 清理批量模式的派生数据
+   */
+  function cleanupBatchModeData() {
+    batchSliceGroups.value = [];
+    // exportTaskQueue 是 computed，会自动清空
+    console.log('[VideoStore] 已清理批量模式数据');
+  }
 
   return {
     selectedVideos: readonly(selectedVideos),
