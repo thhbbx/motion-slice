@@ -62,8 +62,9 @@ function formatBitrate(bps: number): string {
 /**
  * 解析视频元数据
  * 修复 Windows 下 UTF-8/GBK 编码问题
+ * 导出供其他模块使用（如导入流程前置解析）
  */
-async function parseVideoMetadata(filePath: string): Promise<VideoMetadata> {
+export async function parseVideoMetadata(filePath: string): Promise<VideoMetadata> {
   return new Promise((resolve, reject) => {
     // 获取文件统计信息
     const stats = fs.statSync(filePath);

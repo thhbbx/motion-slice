@@ -210,6 +210,8 @@ ipcMain.handle('shell:open-directory', async (_, dirPath) => {
 **根因：** 单选模式只调用 `sliceStore.setPreviewSlices()`，从未创建导出任务。
 
 **修复：** 分析完成后自动创建任务
+
+**修复：** 分析完成后自动创建任务
 ```typescript
 // ToolSlicer.vue - handleAnalyze()
 if (videos.length === 1) {
@@ -238,6 +240,55 @@ if (videos.length === 1) {
 
 ---
 
+### 8. 元数据前置水合（Eager Hydration）✅
+
+**问题：** 导入视频时列表显示随机假数据，点击后突然更新导致 UI 闪烁；批量模式下未点击的视频属性面板显示 `--` 缺省值。
+
+**根因：** `video-scanner.ts` 使用 `generateMockMetadata()` 生成假数据，真实元数据只在点击视频时通过 `videoStore.loadVideoMetadata()` 懒加载，违反单一事实来源原则。
+
+**架构修复：** 导入时统一解析（前置水合）
+```typescript
+// video-scanner.ts - 新增异步扫描接口
+export async function scanVideoFilesAsync(paths: string[]): Promise<FileNode[]> {
+  // 阶段 1: 同步快速扫描文件结构
+  const results = scanDirectoryRecursive(paths);
+  
+  // 阶段 2: 异步并发解析元数据
+  await hydrateMetadata(results);
+  
+  return results;
+}
+
+async function hydrateMetadata(fileTree: FileNode[]): Promise<void> {
+  const videoNodes = collectVideoNodes(fileTree);
+  
+  // 并发解析所有视频元数据
+  await Promise.allSettled(
+    videoNodes.map(async (node) => {
+      const metadata = await parseVideoMetadata(node.path);
+      node.metadata = metadata; // 回填完整元数据
+    })
+  );
+}
+```
+
+**关键修改：**
+1. **metadata-handler.ts**：导出 `parseVideoMetadata()` 供其他模块使用
+2. **video-scanner.ts**：移除 `generateMockMetadata()`，新增 `scanVideoFilesAsync()` 和 `hydrateMetadata()`
+3. **dialog-handler.ts**：两个导入 handler 改用 `scanVideoFilesAsync()`
+4. **useVideoStore.ts**：删除 `loadVideoMetadata()` 函数，简化状态设置逻辑
+
+**收益：**
+- ✅ 导入即准确：列表立即显示真实时长/分辨率，无占位符
+- ✅ 点击无闪烁：元数据已完整，点击只切换状态
+- ✅ 批量属性完整：多选模式所有视频属性自动丰满
+- ✅ 单一事实来源：metadata 只有一个数据源（导入时解析）
+- ✅ 并发性能：使用 `Promise.allSettled` 并发解析，单个失败不影响全局
+
+**详细文档：** `docs/superpowers/plans/2026-06-13-metadata-eager-hydration.md`
+
+---
+
 ## 最终文件清单
 
 ### 新增文件
@@ -253,7 +304,7 @@ if (videos.length === 1) {
 - `src/components/tools/ToolSlicer.vue` - 策略模式重构
 - `src/components/BatchVideoGrid.vue` - 预览按钮集成
 - `src/components/export/BatchExportQueue.vue` - 响应式修复
-- `src/store/useVideoStore.ts` - 批量状态管理
+- `src/store/useVideoStore.ts` - 批量状态管理 + 懒加载移除
 - `src/store/useSliceStore.ts` - 清理批量冗余
 - `src/store/useExportStore.ts` - 单选任务创建
 - `src/types/export.ts` - 类型更新
@@ -261,6 +312,9 @@ if (videos.length === 1) {
 - `src/main/handlers/shell-handler.ts` - shell.openPath
 - `src/main/handlers/export-handler.ts` - 导出引擎
 - `src/main/handlers/slice-handler.ts` - 批量分析
+- `src/main/handlers/metadata-handler.ts` - 导出 parseVideoMetadata
+- `src/main/handlers/dialog-handler.ts` - 异步扫描集成
+- `src/main/utils/video-scanner.ts` - 前置水合架构
 
 ### 删除文件
 - `src/components/workspace/BatchSlicePreview.vue` - 已被 Accordion 取代
@@ -327,6 +381,15 @@ fb2dc98 feat(批量): 实现批量视频智能切片完整管线
 
 ---
 
+### 难点 6：元数据懒加载导致状态撕裂
+**表现：** 导入后列表显示假数据，点击后突然更新；批量模式未点击视频属性显示 `--`。
+
+**根因：** 元数据解析绑定在"点击事件"而非"导入生命周期"，违反单一事实来源。
+
+**解决：** 前置水合架构 - 导入时统一并发解析，点击只负责状态切换。
+
+---
+
 ## 验收清单 ✅
 
 ### 功能验收
@@ -338,6 +401,9 @@ fb2dc98 feat(批量): 实现批量视频智能切片完整管线
 - [x] 点击"打开输出目录"直接进入文件夹
 - [x] 点击"▶ 预览"播放器自动 Seek 到 startTime
 - [x] 单选模式导出队列正常显示
+- [x] 导入即准确：列表立即显示真实时长/分辨率
+- [x] 点击无闪烁：元数据已完整，点击只切换状态
+- [x] 批量属性完整：多选模式所有视频属性自动填充
 
 ### 视觉验收
 - [x] 进度条紫色渐变填充

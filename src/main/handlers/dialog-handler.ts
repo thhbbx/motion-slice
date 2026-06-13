@@ -1,5 +1,5 @@
 import { dialog, ipcMain, app } from 'electron';
-import { scanVideoFiles } from '../utils/video-scanner';
+import { scanVideoFiles, scanVideoFilesAsync } from '../utils/video-scanner';
 import { FileNode } from '../../types/file-tree';
 import path from 'node:path';
 import os from 'node:os';
@@ -46,9 +46,9 @@ export function registerDialogHandlers() {
         return [];
       }
 
-      // 扫描选中的路径并返回文件树
+      // 扫描选中的路径并返回文件树（前置元数据解析）
       console.log('[Dialog Handler] 开始扫描文件:', result.filePaths);
-      const fileTree = scanVideoFiles(result.filePaths);
+      const fileTree = await scanVideoFilesAsync(result.filePaths);
       console.log('[Dialog Handler] 扫描完成，文件数:', fileTree.length);
       return fileTree;
     } catch (error) {
@@ -74,7 +74,8 @@ export function registerDialogHandlers() {
         return { fileTree: [], summary: '' };
       }
 
-      const fileTree = scanVideoFiles(result.filePaths);
+      // 使用异步扫描（前置元数据解析）
+      const fileTree = await scanVideoFilesAsync(result.filePaths);
 
       const allVideoPaths: string[] = [];
       function collectVideos(nodes: FileNode[]) {

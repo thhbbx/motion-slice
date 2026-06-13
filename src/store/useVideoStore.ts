@@ -51,14 +51,20 @@ export const useVideoStore = defineStore('video', () => {
     }
     selectedVideos.value = [video];
     currentTime.value = 0;
-    await loadVideoMetadata(video);
+    // 元数据已在导入时预加载，直接使用
+    if (video.metadata?.duration) {
+      setDuration(parseTimecode(video.metadata.duration));
+    }
   }
 
   async function setSelectedVideos(videos: FileNode[]) {
     selectedVideos.value = videos;
     if (videos.length === 1) {
       currentTime.value = 0;
-      await loadVideoMetadata(videos[0]);
+      // 元数据已在导入时预加载，直接使用
+      if (videos[0].metadata?.duration) {
+        setDuration(parseTimecode(videos[0].metadata.duration));
+      }
     } else {
       currentTime.value = 0;
       duration.value = 0;
@@ -71,28 +77,6 @@ export const useVideoStore = defineStore('video', () => {
       selectedVideos.value.splice(index, 1);
     } else {
       selectedVideos.value.push(video);
-    }
-  }
-
-  async function loadVideoMetadata(video: FileNode) {
-    if (!video || video.type !== 'file') return;
-
-    isFetchingMetadata.value = true;
-    try {
-      const deepMetadata = await window.motionSlice.getVideoMetadata(video.path);
-      const target = selectedVideos.value.find(v => v.id === video.id);
-      if (target) {
-        Object.assign(target, {
-          metadata: { ...target.metadata, ...deepMetadata }
-        });
-        if (deepMetadata.duration) {
-          setDuration(parseTimecode(deepMetadata.duration));
-        }
-      }
-    } catch (error) {
-      console.error('加载元数据失败:', error);
-    } finally {
-      isFetchingMetadata.value = false;
     }
   }
 
