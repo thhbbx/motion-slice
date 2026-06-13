@@ -28,6 +28,14 @@ contextBridge.exposeInMainWorld('motionSlice', {
   },
 
   /**
+   * 打开目录（进入目录内部）
+   * @param dirPath 目录完整路径
+   */
+  openDirectory: (dirPath: string): Promise<string> => {
+    return ipcRenderer.invoke('shell:open-directory', dirPath);
+  },
+
+  /**
    * 获取视频深度元数据
    * @param filePath 视频文件完整路径
    * @returns 视频元数据（8 个专业参数）
@@ -113,6 +121,7 @@ declare global {
       selectMediaFiles: () => Promise<FileNode[]>;
       selectMediaFilesWithFilter: (config: ImportFilterConfig) => Promise<{ fileTree: FileNode[]; summary: string }>;
       showItemInFolder: (filePath: string) => void;
+      openDirectory: (dirPath: string) => Promise<string>;
       getVideoMetadata: (filePath: string) => Promise<VideoMetadata>;
       analyzeSlices: (params: SliceAnalyzeParams) => Promise<SliceAnalyzeResult>;
       batchAnalyzeSlices: (

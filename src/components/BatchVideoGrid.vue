@@ -7,8 +7,14 @@
     <div class="grid-list">
       <div v-for="video in videos" :key="video.id" class="video-group">
         <!-- 视频行 -->
-        <div class="video-row" @click="toggleExpand(video.id)">
-          <span class="expand-icon">{{ isExpanded(video.id) ? '▼' : '▶' }}</span>
+        <div
+          class="video-row"
+          :class="{ focused: isFocused(video.id) }"
+          @click="handleRowClick(video)"
+        >
+          <span class="expand-icon" @click.stop="toggleExpand(video.id)">
+            {{ isExpanded(video.id) ? '▼' : '▶' }}
+          </span>
           <span class="video-name">{{ video.name }}</span>
           <span class="video-duration vt-timecode">{{ video.metadata?.duration || '--' }}</span>
           <span class="video-size">{{ video.metadata?.size || '--' }}</span>
@@ -22,33 +28,65 @@
           </div>
           <div v-else class="slices-list">
             <div v-for="slice in getSlicesForVideo(video.id)" :key="slice.id" class="slice-item" :class="{ disabled: !slice.isActive }">
-              <span class="slice-label">├─ {{ slice.label }}</span>
-              <span class="slice-time vt-timecode">({{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }})</span>
-              <button @click.stop="handleToggleActive(video.id, slice.id)" class="btn-toggle">
-                👁️ {{ slice.isActive ? '禁用' : '启用' }}
+              <span class="slice-label">{{ slice.label }}</span>
+              <span class="slice-time vt-timecode">{{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }}</span>
+              <button class="btn-preview" title="预览切片" @click.stop="handlePreview(video, slice)">▶</button>
+              <button @click.stop="handleToggleActive(video.id, slice.id)" class="btn-toggle" :class="{ active: slice.isActive }">
+                <svg v-if="slice.isActive" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 预览播放器 -->
+    <SlicePreviewModal
+      :is-visible="previewModal.visible"
+      :video-path="previewModal.videoPath"
+      :slice-label="previewModal.sliceLabel"
+      :start-time="previewModal.startTime"
+      :end-time="previewModal.endTime"
+      @close="handleClosePreview"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 import type { FileNode } from '../types/file-tree';
+import type { BatchSliceItem } from '../types/batch';
 import { formatTimecode } from '../utils/timeFormat';
+import SlicePreviewModal from './video/SlicePreviewModal.vue';
 
 defineProps<{
   videos: FileNode[];
 }>();
 
 const videoStore = useVideoStore();
-const { batchSliceGroups } = storeToRefs(videoStore);
+const { batchSliceGroups, focusedVideo } = storeToRefs(videoStore);
 const expandedVideos = ref<Set<string>>(new Set());
+
+const previewModal = reactive({
+  visible: false,
+  videoPath: '',
+  sliceLabel: '',
+  startTime: 0,
+  endTime: 0
+});
+
+function handleRowClick(video: FileNode) {
+  videoStore.setFocusedVideo(video);
+}
 
 function toggleExpand(videoId: string) {
   if (expandedVideos.value.has(videoId)) {
@@ -60,6 +98,10 @@ function toggleExpand(videoId: string) {
 
 function isExpanded(videoId: string) {
   return expandedVideos.value.has(videoId);
+}
+
+function isFocused(videoId: string) {
+  return focusedVideo.value?.id === videoId;
 }
 
 function getSlicesForVideo(videoId: string) {
@@ -85,6 +127,18 @@ function formatTime(seconds: number) {
 
 function handleToggleActive(videoId: string, sliceId: string) {
   videoStore.toggleSliceActive(videoId, sliceId);
+}
+
+function handlePreview(video: FileNode, slice: BatchSliceItem) {
+  previewModal.visible = true;
+  previewModal.videoPath = video.path;
+  previewModal.sliceLabel = slice.label;
+  previewModal.startTime = slice.startTime;
+  previewModal.endTime = slice.endTime;
+}
+
+function handleClosePreview() {
+  previewModal.visible = false;
 }
 </script>
 
@@ -134,10 +188,25 @@ function handleToggleActive(videoId: string, sliceId: string) {
   background: var(--vt-bg-soft);
 }
 
+.video-row.focused {
+  background: rgba(139, 92, 246, 0.15);
+  border-left: 2px solid var(--vt-primary);
+}
+
 .expand-icon {
   font-size: 10px;
   color: var(--vt-text-muted);
   width: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--vt-space-1);
+  transition: color 180ms ease;
+}
+
+.expand-icon:hover {
+  color: var(--vt-primary);
 }
 
 .video-name {
@@ -176,57 +245,106 @@ function handleToggleActive(videoId: string, sliceId: string) {
 }
 
 .slices-panel {
-  background: var(--vt-bg);
-  padding: var(--vt-space-3) var(--vt-space-4) var(--vt-space-3) 52px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--vt-border);
 }
 
 .empty-hint {
   font-size: 12px;
   color: var(--vt-text-muted);
-  padding: var(--vt-space-2) 0;
+  padding: var(--vt-space-4);
 }
 
 .slices-list {
   display: flex;
   flex-direction: column;
-  gap: var(--vt-space-2);
+  padding: var(--vt-space-2) 0 var(--vt-space-2) var(--vt-space-6);
+  border-left: 1px solid var(--vt-border);
+  margin-left: var(--vt-space-4);
 }
 
 .slice-item {
   display: flex;
   align-items: center;
-  gap: var(--vt-space-2);
-  padding: var(--vt-space-2) 0;
-  font-family: var(--vt-font-mono);
+  gap: var(--vt-space-3);
+  padding: var(--vt-space-2) var(--vt-space-4) var(--vt-space-2) var(--vt-space-3);
   font-size: 12px;
+  transition: all 180ms ease;
+}
+
+.slice-item:hover {
+  background: var(--vt-bg-soft);
 }
 
 .slice-item.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
+}
+
+.slice-item.disabled .slice-label,
+.slice-item.disabled .slice-time {
   text-decoration: line-through;
 }
 
 .slice-label {
-  min-width: 100px;
+  font-family: var(--vt-font-mono);
+  font-weight: 500;
+  min-width: 80px;
 }
 
 .slice-time {
   color: var(--vt-text-muted);
+  font-family: var(--vt-font-mono);
   flex: 1;
 }
 
+.btn-preview {
+  padding: 4px 8px;
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-sm);
+  color: var(--vt-text-secondary);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.btn-preview:hover {
+  background: var(--vt-primary-soft);
+  color: var(--vt-primary);
+  border-color: var(--vt-primary);
+}
+
 .btn-toggle {
-  margin-left: auto;
-  padding: 2px 8px;
-  font-size: 11px;
-  background: var(--vt-bg-soft);
+  padding: 4px 8px;
+  background: transparent;
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-sm);
   cursor: pointer;
-  transition: background 180ms ease;
+  transition: all 180ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.btn-toggle:hover {
-  background: var(--vt-bg-elevated);
+.btn-toggle.active {
+  color: var(--vt-text-secondary);
+}
+
+.btn-toggle.active:hover {
+  background: var(--vt-danger-soft);
+  border-color: var(--vt-danger);
+  color: var(--vt-danger);
+}
+
+.btn-toggle:not(.active) {
+  color: var(--vt-text-muted);
+  opacity: 0.6;
+}
+
+.btn-toggle:not(.active):hover {
+  background: var(--vt-primary-soft);
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
+  opacity: 1;
 }
 </style>

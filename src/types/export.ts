@@ -80,8 +80,8 @@ export interface ExportProgressEvent {
  * 导出执行参数（渲染进程 -> 主进程）
  */
 export interface ExportExecuteParams {
-  /** 任务 ID 数组 */
-  taskIds: string[];
+  /** 完整任务数组 */
+  tasks: ExportTask[];
   /** 输出目录 */
   outputDir: string;
   /** 输出格式 */

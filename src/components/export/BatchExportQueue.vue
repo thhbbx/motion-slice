@@ -5,6 +5,21 @@
       <p>共 {{ totalVideos }} 个视频，拦截 {{ disabledCount }} 处废片，最终生成 {{ activeCount }} 个有效切片</p>
     </div>
 
+    <!-- 输出目录选择 -->
+    <div class="output-dir-selector">
+      <label class="dir-label">输出目录</label>
+      <div class="dir-input-group">
+        <input
+          v-model="outputDir"
+          type="text"
+          class="dir-input"
+          placeholder="选择导出目录..."
+          readonly
+        />
+        <button class="btn-browse" @click="handleSelectDir">浏览</button>
+      </div>
+    </div>
+
     <div class="queue-progress">
       <h4>导出队列与进度</h4>
       <div class="progress-bar">
@@ -12,28 +27,84 @@
       </div>
       <p class="progress-text">总进度: {{ completedCount }}/{{ totalTasks }}</p>
       <p v-if="currentTask" class="current-task">
-        当前正在处理: {{ currentTask.videoName }}...{{ currentTask.slice.label }} ({{ currentTask.progress }}%)
+        当前正在处理: {{ currentTask.videoName }} - {{ currentTask.sliceLabel }} ({{ currentTask.progress }}%)
       </p>
     </div>
 
     <div class="queue-list">
       <div v-for="task in exportTasks" :key="task.id" class="task-item" :class="task.status">
-        <span class="task-name">{{ task.videoName }} - {{ task.slice.label }}</span>
+        <span class="task-name" :title="`${task.videoName} - ${task.sliceLabel}`">
+          {{ task.videoName }} - {{ task.sliceLabel }}
+        </span>
         <span class="task-status">{{ statusText(task.status) }}</span>
       </div>
+    </div>
+
+    <!-- 执行按钮 -->
+    <div class="export-actions">
+      <button
+        v-if="!isAllCompleted"
+        class="btn-execute"
+        :disabled="!canExecute || isExporting"
+        @click="handleExecute"
+      >
+        <span v-if="!isExporting">执行批量导出</span>
+        <span v-else>导出中...</span>
+      </button>
+      <button
+        v-else
+        class="btn-completed"
+        @click="handleOpenOutputDir"
+      >
+        📂 打开输出目录
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+/**
+ * 批量导出队列 UI
+ *
+ * 职责：
+ * - 显示导出任务统计和队列
+ * - 提供输出目录选择
+ * - 执行批量导出（串行队列）
+ * - 实时同步导出进度
+ */
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 
 const videoStore = useVideoStore();
-const { exportTaskQueue, batchSliceGroups } = storeToRefs(videoStore);
+const { batchSliceGroups } = storeToRefs(videoStore);
 
-const exportTasks = computed(() => exportTaskQueue.value);
+const outputDir = ref('');
+const isExporting = ref(false);
+
+// 任务进度状态（响应式对象）
+const taskProgress = reactive<Record<string, { status: string; progress: number }>>({});
+
+// 导出任务队列（动态计算，实时过滤禁用切片）
+const exportTasks = computed(() => {
+  return batchSliceGroups.value.flatMap(group => {
+    return group.slices
+      .filter(s => s.isActive)
+      .map(slice => {
+        const taskId = `${slice.id}`; // 使用 slice.id 作为唯一标识
+        const progress = taskProgress[taskId] || { status: 'pending', progress: 0 };
+        return {
+          id: taskId,
+          videoId: group.videoId,
+          videoPath: group.videoPath,
+          videoName: group.videoName,
+          sliceLabel: slice.label,
+          status: progress.status,
+          progress: progress.progress
+        };
+      });
+  });
+});
 
 const totalVideos = computed(() => {
   return new Set(batchSliceGroups.value.map(g => g.videoId)).size;
@@ -46,7 +117,6 @@ const disabledCount = computed(() => {
 });
 
 const activeCount = computed(() => exportTasks.value.length);
-
 const totalTasks = computed(() => exportTasks.value.length);
 
 const completedCount = computed(() => {
@@ -62,6 +132,14 @@ const currentTask = computed(() => {
   return exportTasks.value.find(t => t.status === 'processing');
 });
 
+const canExecute = computed(() => {
+  return outputDir.value && exportTasks.value.length > 0 && !isExporting.value && completedCount.value < totalTasks.value;
+});
+
+const isAllCompleted = computed(() => {
+  return totalTasks.value > 0 && completedCount.value === totalTasks.value;
+});
+
 function statusText(status: string) {
   const map: Record<string, string> = {
     pending: '等待中',
@@ -71,23 +149,355 @@ function statusText(status: string) {
   };
   return map[status] || status;
 }
+
+onMounted(async () => {
+  // 获取默认下载目录
+  try {
+    const defaultPath = await window.motionSlice.getDefaultDownloadPath();
+    outputDir.value = defaultPath;
+  } catch (error) {
+    console.warn('[BatchExport] 获取默认下载目录失败:', error);
+  }
+
+  // 监听导出进度
+  window.motionSlice.onExportProgress((event) => {
+    console.log('[BatchExport] ========== 收到进度事件 ==========');
+    console.log('[BatchExport] event.taskId:', event.taskId);
+    console.log('[BatchExport] event.currentLabel:', event.currentLabel);
+    console.log('[BatchExport] event.current:', event.current, '/', event.total);
+
+    // 提取纯净的 videoId（移除 'export-' 前缀）
+    const extractedVideoId = event.taskId.replace(/^export-/, '');
+    console.log('[BatchExport] 提取的 videoId:', extractedVideoId);
+
+    const allTasks = exportTasks.value;
+    console.log('[BatchExport] 当前任务列表总数:', allTasks.length);
+
+    // 复合键精确匹配：videoPath + sliceLabel
+    const matchingTask = allTasks.find(t =>
+      t.videoPath === extractedVideoId && t.sliceLabel === event.currentLabel
+    );
+
+    if (!matchingTask) {
+      console.error('[BatchExport] ❌ 未找到匹配的任务！');
+      console.error('[BatchExport] 尝试匹配的 videoPath:', extractedVideoId);
+      console.error('[BatchExport] 尝试匹配的 label:', event.currentLabel);
+      return;
+    }
+
+    console.log('[BatchExport] ✅ 找到匹配任务 ID:', matchingTask.id);
+    console.log('[BatchExport] ✅ 匹配的切片:', matchingTask.sliceLabel);
+
+    console.log('[BatchExport] 更新前状态:', taskProgress[matchingTask.id]);
+
+    // 单体任务直接竣工：收到进度事件 = 该切片已处理完毕
+    taskProgress[matchingTask.id] = { status: 'completed', progress: 100 };
+
+    console.log('[BatchExport] 更新后状态:', taskProgress[matchingTask.id]);
+    console.log('[BatchExport] 当前已完成任务数:', Object.values(taskProgress).filter(p => p.status === 'completed').length);
+    console.log('[BatchExport] ========================================');
+  });
+});
+
+onUnmounted(() => {
+  window.motionSlice.offExportProgress();
+});
+
+function handleOpenOutputDir() {
+  if (outputDir.value) {
+    window.motionSlice.openDirectory(outputDir.value);
+  }
+}
+
+async function handleSelectDir() {
+  try {
+    const result = await window.motionSlice.selectOutputDir();
+    if (result) {
+      outputDir.value = result;
+    }
+  } catch (error) {
+    console.error('选择目录失败:', error);
+  }
+}
+
+async function handleExecute() {
+  if (!canExecute.value) return;
+
+  isExporting.value = true;
+
+  try {
+    // 从 exportTaskQueue 构建完整任务列表
+    const tasks = batchSliceGroups.value.flatMap(group => {
+      const activeSlices = group.slices.filter(s => s.isActive);
+      if (activeSlices.length === 0) return [];
+
+      return {
+        id: `export-${group.videoId}`,
+        toolId: 'slicer',
+        title: `${group.videoName} 切片导出`,
+        summary: `共 ${activeSlices.length} 个片段`,
+        status: 'pending' as const,
+        payload: {
+          sourceFilePath: group.videoPath,
+          segments: activeSlices.map(s => ({
+            id: s.id,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            label: s.label
+          }))
+        },
+        createdAt: Date.now()
+      };
+    });
+
+    console.log('[BatchExport] 准备导出:', tasks);
+
+    await window.motionSlice.executeExport({
+      tasks,
+      outputDir: outputDir.value,
+      format: 'mp4',
+      quality: 100
+    });
+    console.log('[BatchExport] 导出完成');
+  } catch (error) {
+    console.error('[BatchExport] 导出失败:', error);
+  } finally {
+    isExporting.value = false;
+  }
+}
 </script>
 
 <style scoped>
-.batch-export-queue { padding: var(--vt-space-4); }
-.queue-summary { margin-bottom: var(--vt-space-4); }
-.queue-summary h3 { font-size: 16px; margin-bottom: var(--vt-space-2); }
-.queue-summary p { font-size: 12px; color: var(--vt-text-muted); }
-.queue-progress { margin-bottom: var(--vt-space-4); }
-.queue-progress h4 { font-size: 14px; margin-bottom: var(--vt-space-2); }
-.progress-bar { height: 8px; background: var(--vt-bg-soft); border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--vt-primary); transition: width 0.3s; }
-.progress-text, .current-task { font-size: 12px; margin-top: var(--vt-space-2); }
-.current-task { color: var(--vt-primary); font-family: var(--vt-font-mono); }
-.queue-list { max-height: 300px; overflow-y: auto; }
-.task-item { display: flex; justify-content: space-between; padding: var(--vt-space-2); border-bottom: 1px solid var(--vt-border); }
-.task-item.completed { opacity: 0.6; }
-.task-item.failed { color: var(--vt-danger); }
-.task-name { font-size: 12px; font-family: var(--vt-font-mono); }
-.task-status { font-size: 11px; color: var(--vt-text-muted); }
+.batch-export-queue {
+  padding: var(--vt-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-4);
+}
+
+.queue-summary {
+  padding: var(--vt-space-4);
+  background: var(--vt-bg-soft);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+}
+
+.queue-summary h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 var(--vt-space-2) 0;
+}
+
+.queue-summary p {
+  font-size: 12px;
+  color: var(--vt-text-muted);
+  margin: 0;
+}
+
+.queue-progress {
+  padding: var(--vt-space-4);
+  background: var(--vt-bg-elevated);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+}
+
+.queue-progress h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 var(--vt-space-3) 0;
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--vt-bg-soft);
+  border-radius: var(--vt-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--vt-border);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  transition: width 300ms ease;
+  border-radius: inherit;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--vt-text-secondary);
+  margin: var(--vt-space-2) 0 0 0;
+  font-family: var(--vt-font-mono);
+}
+
+.current-task {
+  font-size: 12px;
+  color: var(--vt-primary);
+  font-family: var(--vt-font-mono);
+  margin: var(--vt-space-2) 0 0 0;
+  padding: var(--vt-space-2) var(--vt-space-3);
+  background: var(--vt-primary-soft);
+  border-radius: var(--vt-radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+  background: var(--vt-bg-elevated);
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-3);
+  padding: var(--vt-space-3) var(--vt-space-4);
+  border-bottom: 1px solid var(--vt-border);
+  transition: background 180ms ease;
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+.task-item:hover {
+  background: var(--vt-bg-soft);
+}
+
+.task-item.completed {
+  opacity: 1;
+}
+
+.task-item.completed .task-status {
+  color: rgba(16, 185, 129, 0.9);
+  font-weight: 600;
+}
+
+.task-item.failed {
+  background: var(--vt-danger-soft);
+  color: var(--vt-danger);
+}
+
+.task-name {
+  flex: 1;
+  font-size: 12px;
+  font-family: var(--vt-font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.task-status {
+  font-size: 11px;
+  color: var(--vt-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.output-dir-selector {
+  padding: var(--vt-space-4);
+  background: var(--vt-bg-soft);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-2);
+}
+
+.dir-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vt-text-secondary);
+}
+
+.dir-input-group {
+  display: flex;
+  gap: var(--vt-space-2);
+}
+
+.dir-input {
+  flex: 1;
+  padding: var(--vt-space-2) var(--vt-space-3);
+  font-size: 12px;
+  font-family: var(--vt-font-mono);
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-sm);
+  color: var(--vt-text-secondary);
+  cursor: not-allowed;
+}
+
+.btn-browse {
+  padding: var(--vt-space-2) var(--vt-space-4);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--vt-bg-elevated);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-sm);
+  color: var(--vt-text);
+  cursor: pointer;
+  transition: all 180ms ease;
+  flex-shrink: 0;
+}
+
+.btn-browse:hover {
+  background: var(--vt-primary-soft);
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
+}
+
+.export-actions {
+  padding: var(--vt-space-4);
+  border-top: 1px solid var(--vt-border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-execute {
+  padding: var(--vt-space-3) var(--vt-space-6);
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--vt-primary);
+  border: none;
+  border-radius: var(--vt-radius-md);
+  color: white;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.btn-execute:hover:not(:disabled) {
+  background: var(--vt-primary-bright);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.btn-execute:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-completed {
+  padding: var(--vt-space-3) var(--vt-space-6);
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--vt-radius-md);
+  color: rgba(16, 185, 129, 0.95);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.btn-completed:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
 </style>
