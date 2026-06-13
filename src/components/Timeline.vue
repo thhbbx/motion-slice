@@ -986,8 +986,8 @@ watch(duration, async (newDuration) => {
 /* 切片主体区域：纯粹的内部填充，无边框圆角 */
 .slice-body {
   height: 100%;
-  /* 半透明透视：适当的不透明度让底层切片轮廓隐约可见 */
-  background: rgba(88, 101, 242, 0.75);
+  /* 轮廓线穿透：降低不透明度让底层切片边框可见 */
+  background: rgba(88, 101, 242, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -1000,11 +1000,11 @@ watch(duration, async (newDuration) => {
 }
 
 .slice-block:hover .slice-body {
-  background: rgba(88, 101, 242, 0.85);
+  background: rgba(88, 101, 242, 0.65);
 }
 
 .slice-block.active .slice-body {
-  background: rgba(88, 101, 242, 0.9);
+  background: rgba(88, 101, 242, 0.8);
 }
 
 /* 交叠缓冲带：纯粹的内部装饰层，无边框圆角 */
@@ -1014,80 +1014,82 @@ watch(duration, async (newDuration) => {
   box-sizing: border-box;
   position: relative;
   z-index: 1; /* 斜纹背景层级：低于文本 */
+  /* X 光透视：混合模式让重叠区域自然叠加 */
+  mix-blend-mode: multiply;
 }
 
-/* 左侧头部缓冲带（斜纹区域） */
+/* 左侧头部缓冲带（斜纹区域）：绝对透明底色 + 高对比斜纹 */
 .slice-overlap-left {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.35) 0px,
-      rgba(139, 92, 246, 0.35) 2px,
+      rgba(139, 92, 246, 0.4) 0px,
+      rgba(139, 92, 246, 0.4) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.6);
+    transparent; /* 底色完全透明，仅保留斜纹 */
 }
 
 .slice-block:hover .slice-overlap-left {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.5) 0px,
-      rgba(139, 92, 246, 0.5) 2px,
+      rgba(139, 92, 246, 0.55) 0px,
+      rgba(139, 92, 246, 0.55) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.7);
+    transparent;
 }
 
 .slice-block.active .slice-overlap-left {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.65) 0px,
-      rgba(139, 92, 246, 0.65) 2px,
+      rgba(139, 92, 246, 0.7) 0px,
+      rgba(139, 92, 246, 0.7) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.8);
+    rgba(88, 101, 242, 0.15); /* Active 时略微显示底色 */
 }
 
-/* 右侧尾部缓冲带（斜纹区域） */
+/* 右侧尾部缓冲带（斜纹区域）：绝对透明底色 + 高对比斜纹 */
 .slice-overlap-right {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.35) 0px,
-      rgba(139, 92, 246, 0.35) 2px,
+      rgba(139, 92, 246, 0.4) 0px,
+      rgba(139, 92, 246, 0.4) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.6);
+    transparent; /* 底色完全透明，仅保留斜纹 */
 }
 
 .slice-block:hover .slice-overlap-right {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.5) 0px,
-      rgba(139, 92, 246, 0.5) 2px,
+      rgba(139, 92, 246, 0.55) 0px,
+      rgba(139, 92, 246, 0.55) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.7);
+    transparent;
 }
 
 .slice-block.active .slice-overlap-right {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(139, 92, 246, 0.65) 0px,
-      rgba(139, 92, 246, 0.65) 2px,
+      rgba(139, 92, 246, 0.7) 0px,
+      rgba(139, 92, 246, 0.7) 2px,
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.8);
+    rgba(88, 101, 242, 0.15); /* Active 时略微显示底色 */
 }
 
 .slice-block-label {
