@@ -942,22 +942,27 @@ watch(duration, async (newDuration) => {
 
 .slice-block:hover {
   z-index: 10;
+  /* Hover 提权：Z 轴悬浮发光 + 高反差锐化描边 */
+  box-shadow:
+    inset 0 0 0 1px rgba(167, 139, 250, 0.8),  /* 内发光：紫色高亮 */
+    0 0 0 1px rgba(139, 92, 246, 0.6),          /* 外描边：紫色锐化 */
+    0 4px 12px rgba(139, 92, 246, 0.4),         /* Z 轴光晕：悬浮发光 */
+    -3px 0 6px rgba(0, 0, 0, 0.25);             /* 左侧投影：空间高低差 */
+  border-color: rgba(139, 92, 246, 0.9);
   /* 交互反馈：提亮 15% */
   filter: brightness(1.15);
-  /* Hover 提权：强化投影，明确层级 */
-  box-shadow:
-    -3px 0 6px rgba(0, 0, 0, 0.25),
-    0 2px 4px rgba(0, 0, 0, 0.15);
-  border-color: rgba(0, 0, 0, 0.5);
 }
 
 .slice-block.active {
   z-index: 20;
-  /* Active 最高层级：最强投影 */
+  /* Active 最高层级：最强发光 + 实体化边框 */
   box-shadow:
-    -4px 0 8px rgba(0, 0, 0, 0.3),
-    0 3px 6px rgba(0, 0, 0, 0.2);
-  border-color: rgba(139, 92, 246, 0.8);
+    inset 0 0 0 2px rgba(167, 139, 250, 1),     /* 内发光：紫色最强 */
+    0 0 0 2px rgba(139, 92, 246, 0.9),          /* 外描边：2px 实体边框 */
+    0 6px 16px rgba(139, 92, 246, 0.6),         /* Z 轴光晕：最强悬浮 */
+    -4px 0 8px rgba(0, 0, 0, 0.3);              /* 左侧投影：最大高低差 */
+  border-color: rgba(139, 92, 246, 1);
+  filter: brightness(1.2);
 }
 
 /* 统一外壳：包裹所有内部元素，提供整体形态 */
@@ -1000,11 +1005,13 @@ watch(duration, async (newDuration) => {
 }
 
 .slice-block:hover .slice-body {
-  background: rgba(88, 101, 242, 0.65);
+  /* 背景实体化：显著提高不透明度压制底层噪音 */
+  background: rgba(88, 101, 242, 0.9);
 }
 
 .slice-block.active .slice-body {
-  background: rgba(88, 101, 242, 0.8);
+  /* Active 状态：接近完全不透明 */
+  background: rgba(88, 101, 242, 0.95);
 }
 
 /* 交叠缓冲带：纯粹的内部装饰层，无边框圆角 */
@@ -1032,18 +1039,7 @@ watch(duration, async (newDuration) => {
 }
 
 .slice-block:hover .slice-overlap-left {
-  background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(139, 92, 246, 0.55) 0px,
-      rgba(139, 92, 246, 0.55) 2px,
-      transparent 2px,
-      transparent 6px
-    ),
-    transparent;
-}
-
-.slice-block.active .slice-overlap-left {
+  /* 背景实体化：Hover 时显著提高缓冲带不透明度 */
   background:
     repeating-linear-gradient(
       45deg,
@@ -1052,7 +1048,20 @@ watch(duration, async (newDuration) => {
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.15); /* Active 时略微显示底色 */
+    rgba(88, 101, 242, 0.75);
+}
+
+.slice-block.active .slice-overlap-left {
+  /* Active 实体化：接近完全不透明 */
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.85) 0px,
+      rgba(139, 92, 246, 0.85) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.9);
 }
 
 /* 右侧尾部缓冲带（斜纹区域）：绝对透明底色 + 高对比斜纹 */
@@ -1069,18 +1078,7 @@ watch(duration, async (newDuration) => {
 }
 
 .slice-block:hover .slice-overlap-right {
-  background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(139, 92, 246, 0.55) 0px,
-      rgba(139, 92, 246, 0.55) 2px,
-      transparent 2px,
-      transparent 6px
-    ),
-    transparent;
-}
-
-.slice-block.active .slice-overlap-right {
+  /* 背景实体化：Hover 时显著提高缓冲带不透明度 */
   background:
     repeating-linear-gradient(
       45deg,
@@ -1089,7 +1087,20 @@ watch(duration, async (newDuration) => {
       transparent 2px,
       transparent 6px
     ),
-    rgba(88, 101, 242, 0.15); /* Active 时略微显示底色 */
+    rgba(88, 101, 242, 0.75);
+}
+
+.slice-block.active .slice-overlap-right {
+  /* Active 实体化：接近完全不透明 */
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(139, 92, 246, 0.85) 0px,
+      rgba(139, 92, 246, 0.85) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    rgba(88, 101, 242, 0.9);
 }
 
 .slice-block-label {
@@ -1105,10 +1116,20 @@ watch(duration, async (newDuration) => {
   /* 绝对文本层级：确保永远浮于斜纹背景之上 */
   position: relative;
   z-index: 10;
+  transition: all 0.18s ease;
+}
+
+.slice-block:hover .slice-block-label {
+  /* 文字绝对高亮：纯白 + 文字阴影防止被背景吞噬 */
+  color: #ffffff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .slice-block.active .slice-block-label {
-  color: white;
-  font-weight: 600;
+  /* Active 最强高亮 */
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 </style>
