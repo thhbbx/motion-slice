@@ -175,7 +175,7 @@ async function handleAnalyze() {
       params.filePath = videos[0].path;
       const result = await window.motionSlice.analyzeSlices(params);
       sliceStore.setPreviewSlices(result.segments);
-      videoStore.setBatchSliceGroups([]);
+      // 不操作 batchSliceGroups（单选模式不触碰批量轨数据）
 
       // 自动创建导出任务
       if (result.segments.length > 0) {
