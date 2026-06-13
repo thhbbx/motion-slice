@@ -269,31 +269,29 @@ function getBodyStyle(slice: any): any {
   };
 }
 
-// 步骤 2：计算主刻度间隔
+// 步骤 2：计算主刻度间隔（最佳拟合算法）
 function calculateMajorTickInterval(totalDuration: number): number {
-  // 候选步长（秒）：1s, 5s, 10s, 30s, 1min, 5min, 10min, 30min, 1h
-  const candidates = [1, 5, 10, 30, 60, 300, 600, 1800, 3600];
+  // 扩充候选步长：更平滑的过渡
+  const candidates = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
 
-  // 目标：主刻度数量在 10-20 个之间
+  // 目标刻度数量：寻找最接近 10 个主刻度的步长
+  const TARGET_TICKS = 10;
+
+  let bestStep = candidates[0];
+  let minDiff = Infinity;
+
+  // 遍历所有候选步长，找到生成刻度数最接近目标的步长
   for (const step of candidates) {
-    const count = totalDuration / step;
-    if (count >= 10 && count <= 20) {
-      return step;
+    const tickCount = totalDuration / step;
+    const diff = Math.abs(tickCount - TARGET_TICKS);
+
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestStep = step;
     }
   }
 
-  // 边界处理：找到最接近的步长
-  // 如果所有候选步长都太小（count > 20），返回最大的
-  // 如果所有候选步长都太大（count < 10），返回最小的能产生合理刻度数的步长
-  for (let i = candidates.length - 1; i >= 0; i--) {
-    const count = totalDuration / candidates[i];
-    if (count >= 5) {  // 至少 5 个主刻度
-      return candidates[i];
-    }
-  }
-
-  // 极短视频（< 5 秒），使用 1 秒间隔
-  return candidates[0];
+  return bestStep;
 }
 
 // 步骤 3：计算时间轴刻度
