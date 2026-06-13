@@ -957,6 +957,9 @@ watch(duration, async (newDuration) => {
   /* 积木质感：微圆角 + 内发光边框 */
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  /* 主体层级：介于缓冲带和文本之间 */
+  position: relative;
+  z-index: 2;
 }
 
 .slice-block:hover .slice-body {
@@ -978,6 +981,9 @@ watch(duration, async (newDuration) => {
   height: 100%;
   pointer-events: none;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1; /* 斜纹背景层级：低于文本 */
+  overflow: hidden; /* 严格限制斜纹背景不越界 */
 }
 
 /* 左侧头部缓冲带（斜纹区域） */
@@ -994,7 +1000,7 @@ watch(duration, async (newDuration) => {
   border-left: 2px solid rgba(139, 92, 246, 0.9);
   border-top: 1px solid rgba(139, 92, 246, 0.2);
   border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 2px 0 0 2px;
+  border-radius: 4px 0 0 4px; /* 匹配父容器圆角 */
 }
 
 .slice-block:hover .slice-overlap-left {
@@ -1039,7 +1045,7 @@ watch(duration, async (newDuration) => {
   border-right: 2px solid rgba(139, 92, 246, 0.9);
   border-top: 1px solid rgba(139, 92, 246, 0.2);
   border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 0 2px 2px 0;
+  border-radius: 0 4px 4px 0; /* 匹配父容器圆角 */
 }
 
 .slice-block:hover .slice-overlap-right {
@@ -1080,6 +1086,9 @@ watch(duration, async (newDuration) => {
   padding-left: 6px;
   text-align: left;
   width: 100%;
+  /* 绝对文本层级：确保永远浮于斜纹背景之上 */
+  position: relative;
+  z-index: 10;
 }
 
 .slice-block.active .slice-block-label {
