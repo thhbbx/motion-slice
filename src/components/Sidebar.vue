@@ -111,18 +111,7 @@ const allVideosSelected = computed(() =>
 
 async function handleImport() {
   try {
-    // 第一步：重置所有工作区状态
-    console.log('[Sidebar] ========== 开始工作区重置 ==========');
-    fileTreeStore.reset();
-    videoStore.reset();
-    sliceStore.reset();
-    exportStore.reset();
-    console.log('[Sidebar] ========== 工作区重置完成 ==========');
-
-    // 第二步：显示全局加载遮罩
-    appStore.startImporting('正在扫描并解析媒体资产...');
-
-    // 第三步：执行异步导入（带前置元数据水合）
+    // ========== 第一步：准备配置（无副作用）==========
     const plainConfig = {
       enableSizeFilter: filterStore.config.enableSizeFilter,
       minSizeMB: filterStore.config.minSizeMB,
@@ -133,9 +122,28 @@ async function handleImport() {
       enableFormatFilter: filterStore.config.enableFormatFilter,
       allowedFormats: [...filterStore.config.allowedFormats],
     };
+
+    // ========== 第二步：调用 IPC（包含文件选择器 + 扫描）==========
+    // 注意：showOpenDialog 阻塞期间用户可以取消，但一旦确认，主进程立即开始耗时的扫描
+    // 因此我们接受：Loading 会在文件选择器弹出时短暂显示，但如果用户取消则立即隐藏
     const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
 
-    // 第四步：更新文件树
+    // ========== 第三步：安全拦截（Guard Clause）==========
+    if (!result || !result.fileTree || result.fileTree.length === 0) {
+      console.log('[Sidebar] 用户取消导入或未选择文件，保留现有工作区');
+      return; // 用户取消，完美保留现有工作区，无任何副作用
+    }
+
+    // ========== 第四步：确认执行（The Point of No Return）==========
+    // 只有确认获取到有效文件后，才执行破坏性的重置操作
+    console.log('[Sidebar] ========== 开始工作区重置 ==========');
+    fileTreeStore.reset();
+    videoStore.reset();
+    sliceStore.reset();
+    exportStore.reset();
+    console.log('[Sidebar] ========== 工作区重置完成 ==========');
+
+    // 更新文件树
     fileTreeStore.roots = result.fileTree;
 
     if (result.summary) {
@@ -146,9 +154,6 @@ async function handleImport() {
   } catch (error) {
     console.error('[Sidebar] 导入文件失败:', error);
     alert('导入文件失败，请重试');
-  } finally {
-    // 第五步：隐藏全局加载遮罩
-    appStore.finishImporting();
   }
 }
 
