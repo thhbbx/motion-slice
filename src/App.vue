@@ -14,6 +14,9 @@
     </main>
 
     <Inspector />
+
+    <!-- 全局加载遮罩 -->
+    <GlobalLoading />
   </div>
 </template>
 
@@ -25,6 +28,7 @@ import VideoPlayer from './components/VideoPlayer.vue';
 import Inspector from './components/Inspector.vue';
 import Timeline from './components/Timeline.vue';
 import BatchVideoGrid from './components/BatchVideoGrid.vue';
+import GlobalLoading from './components/GlobalLoading.vue';
 
 const videoStore = useVideoStore();
 const { selectedVideos } = storeToRefs(videoStore);

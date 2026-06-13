@@ -75,6 +75,15 @@ export const useExportStore = defineStore('export', () => {
     queueItems.value = [];
   }
 
+  /**
+   * 重置工作区状态（导入新视频时调用）
+   */
+  function reset() {
+    pendingTasks.value = [];
+    queueItems.value = [];
+    console.log('[ExportStore] 工作区状态已重置');
+  }
+
   return {
     // State
     pendingTasks,
@@ -89,5 +98,6 @@ export const useExportStore = defineStore('export', () => {
     setQueueStatus,
     initQueue,
     clearQueue,
+    reset,
   };
 });

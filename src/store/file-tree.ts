@@ -70,6 +70,16 @@ export const useFileTreeStore = defineStore('fileTree', () => {
     return expandedDirIds.value.has(dirId);
   }
 
+  /**
+   * 重置工作区状态（导入新视频时调用）
+   */
+  function reset() {
+    roots.value = [];
+    selectedFileId.value = null;
+    expandedDirIds.value.clear();
+    console.log('[FileTreeStore] 工作区状态已重置');
+  }
+
   return {
     // 状态
     roots,
@@ -81,5 +91,6 @@ export const useFileTreeStore = defineStore('fileTree', () => {
     selectFile,
     toggleDirectory,
     isDirectoryExpanded,
+    reset,
   };
 });

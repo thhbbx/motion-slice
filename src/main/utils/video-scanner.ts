@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { FileNode, VideoMetadata } from '../../types/file-tree';
+import { FileNode } from '../../types/file-tree';
 import { parseVideoMetadata } from '../handlers/metadata-handler';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'];

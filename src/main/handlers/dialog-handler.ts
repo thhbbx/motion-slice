@@ -1,5 +1,5 @@
-import { dialog, ipcMain, app } from 'electron';
-import { scanVideoFiles, scanVideoFilesAsync } from '../utils/video-scanner';
+import { dialog, ipcMain } from 'electron';
+import { scanVideoFilesAsync } from '../utils/video-scanner';
 import { FileNode } from '../../types/file-tree';
 import path from 'node:path';
 import os from 'node:os';
@@ -15,6 +15,36 @@ function getDefaultDownloadPath(): string {
   // Linux: /home/用户名/Downloads
   const homeDir = os.homedir();
   return path.join(homeDir, 'Downloads');
+}
+
+/**
+ * 递归收集所有视频节点
+ */
+function collectVideos(nodes: FileNode[], allVideoPaths: string[]) {
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      allVideoPaths.push(node.path);
+    } else if (node.children) {
+      collectVideos(node.children, allVideoPaths);
+    }
+  }
+}
+
+/**
+ * 过滤文件树，只保留接受的视频
+ */
+function filterTree(nodes: FileNode[], acceptedSet: Set<string>): FileNode[] {
+  return nodes
+    .map(node => {
+      if (node.type === 'file') {
+        return acceptedSet.has(node.path) ? node : null;
+      } else if (node.children) {
+        const filteredChildren = filterTree(node.children, acceptedSet);
+        return filteredChildren.length > 0 ? { ...node, children: filteredChildren } : null;
+      }
+      return null;
+    })
+    .filter((node): node is FileNode => node !== null);
 }
 
 /**
@@ -78,35 +108,12 @@ export function registerDialogHandlers() {
       const fileTree = await scanVideoFilesAsync(result.filePaths);
 
       const allVideoPaths: string[] = [];
-      function collectVideos(nodes: FileNode[]) {
-        for (const node of nodes) {
-          if (node.type === 'file') {
-            allVideoPaths.push(node.path);
-          } else if (node.children) {
-            collectVideos(node.children);
-          }
-        }
-      }
-      collectVideos(fileTree);
+      collectVideos(fileTree, allVideoPaths);
 
       const { accepted, rejected } = await filterVideoFiles(allVideoPaths, filterConfig);
 
       const acceptedSet = new Set(accepted);
-      function filterTree(nodes: FileNode[]): FileNode[] {
-        return nodes
-          .map(node => {
-            if (node.type === 'file') {
-              return acceptedSet.has(node.path) ? node : null;
-            } else if (node.children) {
-              const filteredChildren = filterTree(node.children);
-              return filteredChildren.length > 0 ? { ...node, children: filteredChildren } : null;
-            }
-            return null;
-          })
-          .filter((node): node is FileNode => node !== null);
-      }
-
-      const filteredTree = filterTree(fileTree);
+      const filteredTree = filterTree(fileTree, acceptedSet);
       const summary = `成功导入 ${accepted.length} 个视频，按规则过滤掉 ${rejected.length} 个`;
 
       return { fileTree: filteredTree, summary };

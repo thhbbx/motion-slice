@@ -71,6 +71,9 @@ import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileTreeStore } from '../store/file-tree';
 import { useVideoStore } from '../store/useVideoStore';
+import { useSliceStore } from '../store/useSliceStore';
+import { useExportStore } from '../store/useExportStore';
+import { useAppStore } from '../store/useAppStore';
 import FileTreeItem from './FileTreeItem.vue';
 import ImportFilterModal from './ImportFilterModal.vue';
 import { useImportFilterStore } from '../store/useImportFilterStore';
@@ -81,6 +84,9 @@ const fileTreeStore = useFileTreeStore();
 const { roots } = storeToRefs(fileTreeStore);
 const filterStore = useImportFilterStore();
 const videoStore = useVideoStore();
+const sliceStore = useSliceStore();
+const exportStore = useExportStore();
+const appStore = useAppStore();
 
 const sidebarWidth = ref(260);
 const showFilterModal = ref(false);
@@ -105,6 +111,18 @@ const allVideosSelected = computed(() =>
 
 async function handleImport() {
   try {
+    // 第一步：重置所有工作区状态
+    console.log('[Sidebar] ========== 开始工作区重置 ==========');
+    fileTreeStore.reset();
+    videoStore.reset();
+    sliceStore.reset();
+    exportStore.reset();
+    console.log('[Sidebar] ========== 工作区重置完成 ==========');
+
+    // 第二步：显示全局加载遮罩
+    appStore.startImporting('正在扫描并解析媒体资产...');
+
+    // 第三步：执行异步导入（带前置元数据水合）
     const plainConfig = {
       enableSizeFilter: filterStore.config.enableSizeFilter,
       minSizeMB: filterStore.config.minSizeMB,
@@ -116,13 +134,21 @@ async function handleImport() {
       allowedFormats: [...filterStore.config.allowedFormats],
     };
     const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
+
+    // 第四步：更新文件树
     fileTreeStore.roots = result.fileTree;
+
     if (result.summary) {
-      console.log(result.summary);
+      console.log('[Sidebar] 导入摘要:', result.summary);
     }
+
+    console.log('[Sidebar] ========== 导入完成 ==========');
   } catch (error) {
-    console.error('导入文件失败:', error);
+    console.error('[Sidebar] 导入文件失败:', error);
     alert('导入文件失败，请重试');
+  } finally {
+    // 第五步：隐藏全局加载遮罩
+    appStore.finishImporting();
   }
 }
 

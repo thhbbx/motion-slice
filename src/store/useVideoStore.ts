@@ -118,6 +118,18 @@ export const useVideoStore = defineStore('video', () => {
     console.log(`[VideoStore] 切片 ${sliceId} 状态: ${slice.isActive ? '启用' : '禁用'}`);
   }
 
+  /**
+   * 重置工作区状态（导入新视频时调用）
+   */
+  function reset() {
+    selectedVideos.value = [];
+    focusedVideo.value = null;
+    batchSliceGroups.value = [];
+    currentTime.value = 0;
+    duration.value = 0;
+    console.log('[VideoStore] 工作区状态已重置');
+  }
+
   return {
     selectedVideos: readonly(selectedVideos),
     focusedVideo: readonly(focusedVideo),
@@ -137,5 +149,6 @@ export const useVideoStore = defineStore('video', () => {
     clearActiveVideo,
     setCurrentTime,
     setDuration,
+    reset,
   };
 });

@@ -20,9 +20,14 @@ export const useSliceStore = defineStore('slice', () => {
     activeSliceId.value = id;
   }
 
-  function clearSlices() {
+  /**
+   * 重置工作区状态（导入新视频时调用）
+   */
+  function reset() {
     previewSlices.value = [];
     activeSliceId.value = null;
+    isAnalyzing.value = false;
+    console.log('[SliceStore] 工作区状态已重置');
   }
 
   function setAnalyzing(status: boolean) {
@@ -36,7 +41,8 @@ export const useSliceStore = defineStore('slice', () => {
     activeSlice,
     setPreviewSlices,
     setActiveSlice,
-    clearSlices,
+    clearSlices: reset, // 兼容旧代码
+    reset,
     setAnalyzing,
   };
 });
