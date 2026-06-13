@@ -123,27 +123,33 @@ async function handleImport() {
       allowedFormats: [...filterStore.config.allowedFormats],
     };
 
-    // ========== 第二步：调用 IPC（包含文件选择器 + 扫描）==========
+    // ========== 第二步：显示 Loading（在 IPC 调用前）==========
+    // 注意：这会在文件选择器弹出时也显示 Loading，但这是必要的
+    // 因为主进程的扫描发生在 IPC 内部，渲染进程无法在中间插入状态
+    console.log('[Sidebar] 显示 Loading 遮罩');
+    appStore.startImporting('正在选择文件...');
+
+    // 强制让出主线程给渲染管线
+    console.log('[Sidebar] 等待渲染管线...');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    console.log('[Sidebar] 渲染完成，开始调用 IPC');
+
+    // ========== 第三步：调用 IPC（包含文件选择器 + 扫描）==========
     const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
 
-    // ========== 第三步：安全拦截（Guard Clause）==========
+    // ========== 第四步：安全拦截（Guard Clause）==========
     if (!result || !result.fileTree || result.fileTree.length === 0) {
       console.log('[Sidebar] 用户取消导入或未选择文件，保留现有工作区');
       return; // 用户取消，完美保留现有工作区，无任何副作用
     }
 
-    // ========== 第四步：显示 Loading 遮罩（优先视觉反馈）==========
-    console.log('[Sidebar] 显示 Loading 遮罩');
+    // ========== 第五步：更新 Loading 消息 ==========
     appStore.startImporting('正在重置工作区并更新文件...');
 
-    // ========== 关键：强制让出主线程给渲染管线 ==========
-    // 使用 50ms 延迟确保浏览器有足够时间完成渲染
-    // 注意：0ms 在某些情况下可能不够，需要更长的宏任务延迟
-    console.log('[Sidebar] 等待渲染管线...');
+    // 再次让出主线程
     await new Promise(resolve => setTimeout(resolve, 50));
-    console.log('[Sidebar] 渲染完成，开始执行重任务');
 
-    // ========== 第五步：确认执行（The Point of No Return）==========
+    // ========== 第六步：确认执行（The Point of No Return）==========
     // 只有在确切拿到有效文件且 Loading 已绘制后，才执行破坏性重置
     console.log('[Sidebar] ========== 开始工作区重置 ==========');
     fileTreeStore.reset();
