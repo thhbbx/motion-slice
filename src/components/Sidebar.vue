@@ -123,32 +123,40 @@ async function handleImport() {
       allowedFormats: [...filterStore.config.allowedFormats],
     };
 
-    // ========== 第二步：显示 Loading（在 IPC 调用前）==========
-    // 第一阶段：等待用户选择文件
-    // 注意：由于主进程的 dialog + scan 在同一个 IPC handler 中，
-    // "正在选择文件..."这个提示会覆盖：
-    // 1. 文件选择器弹出期间（用户正在选择）
-    // 2. 用户确认后的扫描期间（已选择，正在处理）
-    // 为了语义准确，使用"正在导入..."作为通用提示
-    console.log('[Sidebar] 显示 Loading 遮罩');
-    appStore.startImporting('正在导入并解析视频...');
+    // ========== 第二步：显示 Loading - 第一阶段（选择文件）==========
+    console.log('[Sidebar] 显示 Loading 遮罩 - 第一阶段');
+    appStore.startImporting('正在选择文件...');
 
     // 强制让出主线程给渲染管线
     console.log('[Sidebar] 等待渲染管线...');
     await new Promise(resolve => setTimeout(resolve, 50));
-    console.log('[Sidebar] 渲染完成，开始调用 IPC');
+    console.log('[Sidebar] 渲染完成，开始调用文件选择器');
 
-    // ========== 第三步：调用 IPC（包含文件选择器 + 扫描）==========
-    const result = await window.motionSlice.selectMediaFilesWithFilter(plainConfig);
+    // ========== 第三步：调用文件选择器（仅选择，不扫描）==========
+    const filePaths = await window.motionSlice.selectFilesOnly();
 
     // ========== 第四步：安全拦截（Guard Clause）==========
-    if (!result || !result.fileTree || result.fileTree.length === 0) {
+    if (!filePaths || filePaths.length === 0) {
       console.log('[Sidebar] 用户取消导入或未选择文件，保留现有工作区');
       return; // 用户取消，完美保留现有工作区，无任何副作用
     }
 
-    // ========== 第五步：更新 Loading 消息 ==========
-    console.log('[Sidebar] 更新 Loading 消息为："正在重置工作区并更新文件..."');
+    console.log('[Sidebar] 用户选择了', filePaths.length, '个文件/文件夹');
+
+    // ========== 第五步：更新 Loading - 第二阶段（扫描解析）==========
+    console.log('[Sidebar] 更新 Loading 消息 - 第二阶段');
+    appStore.startImporting('正在扫描并解析视频...');
+
+    // 再次让出主线程，确保消息更新被渲染
+    console.log('[Sidebar] 等待消息更新渲染...');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('[Sidebar] 消息更新完成，开始扫描');
+
+    // ========== 第六步：扫描并过滤视频 ==========
+    const result = await window.motionSlice.scanAndFilterVideos(filePaths, plainConfig);
+
+    // ========== 第七步：更新 Loading - 第三阶段（重置工作区）==========
+    console.log('[Sidebar] 更新 Loading 消息 - 第三阶段');
     appStore.startImporting('正在重置工作区并更新文件...');
 
     // 再次让出主线程，确保消息更新被渲染
@@ -156,7 +164,7 @@ async function handleImport() {
     await new Promise(resolve => setTimeout(resolve, 100));
     console.log('[Sidebar] 消息更新完成，开始执行重置');
 
-    // ========== 第六步：确认执行（The Point of No Return）==========
+    // ========== 第八步：确认执行（The Point of No Return）==========
     // 只有在确切拿到有效文件且 Loading 已绘制后，才执行破坏性重置
     console.log('[Sidebar] ========== 开始工作区重置 ==========');
     fileTreeStore.reset();

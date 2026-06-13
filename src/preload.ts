@@ -20,6 +20,25 @@ contextBridge.exposeInMainWorld('motionSlice', {
   },
 
   /**
+   * 仅选择文件（不扫描元数据）
+   * @param config 过滤配置
+   * @returns 文件路径数组，用户取消则返回空数组
+   */
+  selectFilesOnly: (): Promise<string[]> => {
+    return ipcRenderer.invoke('dialog:select-files-only');
+  },
+
+  /**
+   * 扫描并过滤视频文件
+   * @param paths 文件路径数组
+   * @param config 过滤配置
+   * @returns 文件树和摘要
+   */
+  scanAndFilterVideos: (paths: string[], config: ImportFilterConfig): Promise<{ fileTree: FileNode[]; summary: string }> => {
+    return ipcRenderer.invoke('video:scan-and-filter', paths, config);
+  },
+
+  /**
    * 在资源管理器中显示文件
    * @param filePath 文件完整路径
    */
