@@ -573,10 +573,15 @@ watch(activeVideo, async (newVideo, oldVideo) => {
 }, { immediate: true, flush: 'post' });
 
 // 监听 duration 变化，确保元数据加载完成后触发缩略图生成
-watch(duration, async (newDuration) => {
+watch(duration, async (newDuration, oldDuration) => {
+  // 只有当 duration 真正变化（从 0 变为有效值，或切换到不同视频）时才触发
+  // 避免相同 duration 的重复触发
+  if (newDuration === oldDuration) return;
+
   // 当 duration 变化且大于 0，且当前有选中视频，且缩略图为空时触发
   // 添加 isThumbnailsLoading 检查避免重复触发
   if (newDuration > 0 && activeVideo.value?.path && thumbnails.value.length === 0 && !isThumbnailsLoading.value) {
+    console.log(`[Timeline] Duration 变化: ${oldDuration} -> ${newDuration}，触发缩略图生成`);
     await generateThumbnails(activeVideo.value.path);
   }
 }, { flush: 'post' });
