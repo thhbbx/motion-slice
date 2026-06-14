@@ -3,18 +3,22 @@ import ffmpeg from 'fluent-ffmpeg';
 import path from 'node:path';
 import fs from 'node:fs';
 import { getFfmpegPath } from '../utils/ffmpeg-helper';
+import { getFfprobePath } from '../utils/ffprobe-helper';
 import type { ExportExecuteParams, ExportTask } from '../../types/export';
 
 /**
- * 初始化 FFmpeg 路径（延迟到首次使用时）
+ * 初始化 FFmpeg/FFprobe 路径（延迟到首次使用时）
  */
 let ffmpegInitialized = false;
 function ensureFfmpegPath() {
   if (!ffmpegInitialized) {
     const ffmpegPath = getFfmpegPath();
+    const ffprobePath = getFfprobePath();
     ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
     ffmpegInitialized = true;
     console.log('[Export Handler] FFmpeg 路径已设置:', ffmpegPath);
+    console.log('[Export Handler] FFprobe 路径已设置:', ffprobePath);
   }
 }
 
