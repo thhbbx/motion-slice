@@ -5,14 +5,26 @@ import { execFile } from 'node:child_process';
 import { getFfprobePath } from '../utils/ffprobe-helper';
 import type { VideoMetadata } from '../../types/file-tree';
 
-// 配置 ffprobe 路径
-const ffprobePath = getFfprobePath();
-console.log('[metadata-handler] ffprobe 路径:', ffprobePath);
-console.log('[metadata-handler] 文件是否存在:', fs.existsSync(ffprobePath));
+/**
+ * 延迟初始化 ffprobe 路径（仅在首次使用时计算）
+ * 避免在 Electron app 未完全准备好时执行路径计算
+ */
+let ffprobeInitialized = false;
+function ensureFfprobePath(): string {
+  if (!ffprobeInitialized) {
+    const ffprobePath = getFfprobePath();
+    console.log('[metadata-handler] ffprobe 路径:', ffprobePath);
+    console.log('[metadata-handler] 文件是否存在:', fs.existsSync(ffprobePath));
 
-// 同时设置 ffmpeg 和 ffprobe 路径（都指向 ffprobe，因为我们只用 ffprobe）
-ffmpeg.setFfmpegPath(ffprobePath);
-ffmpeg.setFfprobePath(ffprobePath);
+    // 同时设置 ffmpeg 和 ffprobe 路径（都指向 ffprobe，因为我们只用 ffprobe）
+    ffmpeg.setFfmpegPath(ffprobePath);
+    ffmpeg.setFfprobePath(ffprobePath);
+    ffprobeInitialized = true;
+
+    return ffprobePath;
+  }
+  return getFfprobePath();
+}
 
 /**
  * 格式化文件大小
@@ -66,6 +78,9 @@ function formatBitrate(bps: number): string {
  */
 export async function parseVideoMetadata(filePath: string): Promise<VideoMetadata> {
   return new Promise((resolve, reject) => {
+    // 延迟获取 ffprobe 路径
+    const ffprobePath = ensureFfprobePath();
+
     // 获取文件统计信息
     const stats = fs.statSync(filePath);
 

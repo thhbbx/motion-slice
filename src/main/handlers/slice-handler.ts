@@ -6,8 +6,18 @@ import type { SliceAnalyzeParams, SliceAnalyzeResult, VideoSegment } from '../..
 import type { BatchSliceGroup } from '../../types/batch';
 import { TaskQueue } from '../../utils/taskQueue';
 
-// 配置 ffprobe 路径
-const ffprobePath = getFfprobePath();
+/**
+ * 延迟初始化 ffprobe 路径（仅在首次使用时计算）
+ * 避免在 Electron app 未完全准备好时执行路径计算
+ */
+let ffprobePathCache: string | null = null;
+function ensureFfprobePath(): string {
+  if (!ffprobePathCache) {
+    ffprobePathCache = getFfprobePath();
+    console.log('[SliceHandler] FFprobe 路径已设置:', ffprobePathCache);
+  }
+  return ffprobePathCache;
+}
 
 /**
  * 获取视频时长（秒）
@@ -15,6 +25,8 @@ const ffprobePath = getFfprobePath();
  */
 async function getVideoDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {
+    const ffprobePath = ensureFfprobePath(); // 延迟获取路径
+
     const args = [
       '-v', 'error',
       '-show_entries', 'format=duration',

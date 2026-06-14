@@ -15,45 +15,13 @@ const config: ForgeConfig = {
 
     // Mac 专属包名配置（如果以后要上架 Mac 或做代码签名，这个必填）
     // appBundleId: 'com.yourname.motionslice',
-    asar: {
-      unpack: '**/node_modules/{ffprobe-static,ffmpeg-static}/**/*'
-    },
 
-    // 打包后处理钩子：确保 macOS/Linux 上的二进制文件有执行权限
-    afterCopy: [
-      (buildPath, electronVersion, platform, arch, callback) => {
-        if (platform === 'darwin' || platform === 'linux') {
-          // 标准化架构名称映射
-          const archMap: Record<string, string> = {
-            'x64': 'x64',
-            'arm64': 'arm64',
-            'ia32': 'ia32',
-          };
+    asar: true,
 
-          const normalizedArch = archMap[arch] || arch;
-
-          const binaryPaths = [
-            // ffprobe 路径
-            path.join(buildPath, 'node_modules', 'ffprobe-static', 'bin', platform, normalizedArch, 'ffprobe'),
-            // ffmpeg 路径（不同平台可能在不同位置）
-            path.join(buildPath, 'node_modules', 'ffmpeg-static', 'ffmpeg'),
-          ];
-
-          for (const binaryPath of binaryPaths) {
-            if (fs.existsSync(binaryPath)) {
-              try {
-                fs.chmodSync(binaryPath, 0o755);
-                console.log(`[Forge] ✅ 已设置执行权限: ${binaryPath}`);
-              } catch (error) {
-                console.error(`[Forge] ❌ 设置执行权限失败: ${binaryPath}`, error);
-              }
-            } else {
-              console.warn(`[Forge] ⚠️  二进制文件不存在，跳过: ${binaryPath}`);
-            }
-          }
-        }
-        callback();
-      }
+    // 额外资源：将二进制文件复制到 resources 目录外层（不打包进 asar）
+    extraResource: [
+      'node_modules/ffprobe-static',
+      'node_modules/ffmpeg-static',
     ],
   },
   // 重新编译 C++ 原生模块的配置（如果没用到 sqlite3、ffi-napi 等底层库，留空即可）
