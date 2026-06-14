@@ -23,8 +23,19 @@ const config: ForgeConfig = {
     afterCopy: [
       (buildPath, electronVersion, platform, arch, callback) => {
         if (platform === 'darwin' || platform === 'linux') {
+          // 标准化架构名称映射
+          const archMap: Record<string, string> = {
+            'x64': 'x64',
+            'arm64': 'arm64',
+            'ia32': 'ia32',
+          };
+
+          const normalizedArch = archMap[arch] || arch;
+
           const binaryPaths = [
-            path.join(buildPath, 'node_modules', 'ffprobe-static', 'bin', platform, arch, 'ffprobe'),
+            // ffprobe 路径
+            path.join(buildPath, 'node_modules', 'ffprobe-static', 'bin', platform, normalizedArch, 'ffprobe'),
+            // ffmpeg 路径（不同平台可能在不同位置）
             path.join(buildPath, 'node_modules', 'ffmpeg-static', 'ffmpeg'),
           ];
 
@@ -32,10 +43,12 @@ const config: ForgeConfig = {
             if (fs.existsSync(binaryPath)) {
               try {
                 fs.chmodSync(binaryPath, 0o755);
-                console.log(`[Forge] 已设置执行权限: ${binaryPath}`);
+                console.log(`[Forge] ✅ 已设置执行权限: ${binaryPath}`);
               } catch (error) {
-                console.error(`[Forge] 设置执行权限失败: ${binaryPath}`, error);
+                console.error(`[Forge] ❌ 设置执行权限失败: ${binaryPath}`, error);
               }
+            } else {
+              console.warn(`[Forge] ⚠️  二进制文件不存在，跳过: ${binaryPath}`);
             }
           }
         }
