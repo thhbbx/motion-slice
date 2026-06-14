@@ -20,7 +20,7 @@ jobs:
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
-          node-version: 18 # 请确认这是否与你本地开发的 Node 版本一致
+          node-version: 22 # 请确认这是否与你本地开发的 Node 版本一致
 
       - name: 安装依赖
         run: npm install
