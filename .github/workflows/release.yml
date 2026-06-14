@@ -1,0 +1,40 @@
+name: Release MotionSlice
+
+on:
+  push:
+    tags:
+      - 'v*' # 只有当你推了 v 开头的 tag（比如 v1.0.0）才会触发流水线
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # 同时启动两台云主机：一台 Windows，一台 Mac
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18 # 请确认这是否与你本地开发的 Node 版本一致
+
+      - name: 安装依赖
+        run: npm install
+
+      - name: 执行打包 (Make)
+        run: npm run make
+
+      - name: 上传安装包到 GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/make/**/*.exe
+            out/make/**/*.zip
+            out/make/**/*.dmg
+        env:
+          # 这是 GitHub 自动提供的令牌，用于授权上传文件
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
