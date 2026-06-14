@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*' # 只有当你推了 v 开头的 tag（比如 v1.0.0）才会触发流水线
+permissions:
+  contents: write
 
 jobs:
   release:
