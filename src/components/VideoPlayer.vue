@@ -36,9 +36,31 @@ const videoElement = ref<HTMLVideoElement | null>(null);
 const videoSrc = computed(() => {
   if (!activeVideo.value) return '';
   const path = activeVideo.value.path;
-  // Windows 路径转换：D:\path\to\video.mp4 -> file://D:/path/to/video.mp4
-  const normalizedPath = path.replace(/\\/g, '/');
-  return `file://${normalizedPath}`;
+
+  // 跨平台路径处理
+  // 1. Windows: D:\path\to\video.mp4 -> file:///D:/path/to/video.mp4
+  // 2. macOS/Linux: /Users/path/to/video.mp4 -> file:///Users/path/to/video.mp4
+  // 3. URL 编码处理中文和特殊字符
+
+  let normalizedPath = path;
+
+  // Windows: 反斜杠转正斜杠
+  if (path.includes('\\')) {
+    normalizedPath = path.replace(/\\/g, '/');
+  }
+
+  // 确保以 / 开头（Windows 路径需要添加）
+  if (!normalizedPath.startsWith('/')) {
+    normalizedPath = '/' + normalizedPath;
+  }
+
+  // URL 编码路径组件（保留 /）
+  const encodedPath = normalizedPath
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+
+  return `file://${encodedPath}`;
 });
 
 // 视频加载完成

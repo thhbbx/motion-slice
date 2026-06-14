@@ -64,7 +64,11 @@ const config: ForgeConfig = {
     // Windows: 一键安装包 (.exe)
     new MakerSquirrel({
       name: 'MotionSlice',
-      setupIcon: './assets/MotionSlicelOGO.ico'
+      authors: 'thb',
+      description: 'MotionSlice - Video slicing and shake detection tool',
+      setupIcon: './assets/MotionSlicelOGO.ico',
+      // 禁用 delta 更新以避免打包问题
+      noDelta: true,
     }),
 
     // macOS: 拖拽安装包 (.dmg)
