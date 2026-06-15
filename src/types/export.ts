@@ -89,3 +89,11 @@ export interface ExportExecuteParams {
   /** 视频质量（10-100） */
   quality: number;
 }
+
+/**
+ * 导出执行结果（主进程 -> 渲染进程）
+ */
+export interface ExportExecuteResult {
+  success: boolean;
+  error?: string;
+}

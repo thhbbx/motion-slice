@@ -216,18 +216,21 @@ async function handleExecuteExport() {
   try {
     const taskIds = pendingTasks.value.map(t => t.id);
 
-    // 初始化队列
     exportStore.initQueue(taskIds);
+    taskIds.forEach(taskId => exportStore.setQueueStatus(taskId, 'processing'));
 
-    // 调用主进程执行导出（将响应式对象转换为纯对象）
-    await window.motionSlice.executeExport({
+    const result = await window.motionSlice.executeExport({
       tasks: JSON.parse(JSON.stringify(pendingTasks.value)),
       outputDir: exportConfig.value.outputDir,
       format: exportConfig.value.format,
       quality: exportConfig.value.quality,
     });
 
-    console.log('[ExportTab] 导出任务已提交');
+    if (!result.success) {
+      throw new Error(result.error || '导出失败');
+    }
+
+    console.log('[ExportTab] 导出任务已完成');
   } catch (error) {
     console.error('执行导出失败:', error);
 

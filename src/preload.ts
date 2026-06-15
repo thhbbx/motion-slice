@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { FileNode, VideoMetadata } from './types/file-tree';
 import type { SliceAnalyzeParams, SliceAnalyzeResult } from './types/slice';
-import type { ExportExecuteParams, ExportProgressEvent } from './types/export';
+import type { ExportExecuteParams, ExportExecuteResult, ExportProgressEvent } from './types/export';
 import type { ImportFilterConfig } from './types/import-filter';
 import type { BatchSliceGroup } from './types/batch';
 
@@ -114,7 +114,7 @@ contextBridge.exposeInMainWorld('motionSlice', {
    * @param params 导出执行参数（任务 ID 数组、输出目录、格式、质量）
    * @returns 执行结果
    */
-  executeExport: (params: ExportExecuteParams): Promise<{ success: boolean }> => {
+  executeExport: (params: ExportExecuteParams): Promise<ExportExecuteResult> => {
     return ipcRenderer.invoke('export:execute', params);
   },
 
@@ -150,7 +150,7 @@ declare global {
       onBatchAnalyzeProgress: (callback: (event: { current: number; total: number }) => void) => void;
       getDefaultDownloadPath: () => Promise<string>;
       selectOutputDir: () => Promise<string | null>;
-      executeExport: (params: ExportExecuteParams) => Promise<{ success: boolean }>;
+      executeExport: (params: ExportExecuteParams) => Promise<ExportExecuteResult>;
       onExportProgress: (callback: (event: ExportProgressEvent) => void) => void;
       offExportProgress: () => void;
     };

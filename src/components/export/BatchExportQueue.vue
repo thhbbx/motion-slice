@@ -252,12 +252,17 @@ async function handleExecute() {
 
     console.log('[BatchExport] 准备导出:', tasks);
 
-    await window.motionSlice.executeExport({
+    const result = await window.motionSlice.executeExport({
       tasks,
       outputDir: outputDir.value,
       format: 'mp4',
       quality: 100
     });
+
+    if (!result.success) {
+      throw new Error(result.error || '导出失败');
+    }
+
     console.log('[BatchExport] 导出完成');
   } catch (error) {
     console.error('[BatchExport] 导出失败:', error);

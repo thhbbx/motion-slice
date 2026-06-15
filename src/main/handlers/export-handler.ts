@@ -39,12 +39,23 @@ function ensureOutputDir(outputDir: string): void {
 }
 
 /**
+ * 解析可用于 FFmpeg 的源文件路径（macOS 上统一为文件系统原生路径）
+ */
+function resolveSourcePath(sourceFilePath: string): string {
+  if (!fs.existsSync(sourceFilePath)) {
+    throw new Error(`源文件不存在: ${sourceFilePath}`);
+  }
+  return fs.realpathSync.native(sourceFilePath);
+}
+
+/**
  * 导出单个视频切片
  * @param sourceFilePath 源视频路径
  * @param outputPath 输出文件路径
  * @param startTime 起始时间（秒）
  * @param endTime 结束时间（秒）
  * @param quality 质量（10-100）
+ * @param format 输出格式
  * @returns Promise<void>
  */
 function exportSegment(
@@ -52,45 +63,83 @@ function exportSegment(
   outputPath: string,
   startTime: number,
   endTime: number,
-  quality: number
+  quality: number,
+  format: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    // 确保 FFmpeg 路径已初始化
     ensureFfmpegPath();
 
     const duration = endTime - startTime;
+    if (duration <= 0) {
+      reject(new Error(`片段时间范围无效: ${startTime}s - ${endTime}s`));
+      return;
+    }
 
-    const command = ffmpeg(sourceFilePath)
+    const resolvedSource = resolveSourcePath(sourceFilePath);
+    const command = ffmpeg(resolvedSource)
       .setStartTime(startTime)
-      .setDuration(duration);
+      .setDuration(duration)
+      .outputOptions(['-map', '0:v:0', '-map', '0:a:0?']);
 
-    // 根据质量选择编码策略
     if (quality === 100) {
-      // 质量 100：使用流拷贝，无损极速切割
-      command.outputOptions([
-        '-c copy',  // 流拷贝，不重新编码
-      ]);
+      // MP4 容器不支持直接拷贝 MOV 中常见的 PCM 音频，需保留视频流拷贝并转码音频
+      if (format === 'mp4') {
+        command.outputOptions([
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-movflags', '+faststart',
+        ]);
+      } else {
+        command.outputOptions(['-c', 'copy']);
+      }
     } else {
-      // 质量 < 100：使用 libx264 编码，CRF 压制
       const crf = Math.round(28 - (quality / 100) * 10);
       command.outputOptions([
-        '-c:v libx264',        // 视频编码器
-        `-crf ${crf}`,         // 质量控制
-        '-preset fast',        // 编码速度预设
-        '-c:a aac',            // 音频编码器
-        '-b:a 128k',           // 音频码率
+        '-c:v', 'libx264',
+        '-crf', String(crf),
+        '-preset', 'fast',
+        '-c:a', 'aac',
+        '-b:a', '128k',
       ]);
+      if (format === 'mp4') {
+        command.outputOptions(['-movflags', '+faststart']);
+      }
     }
+
+    let stderr = '';
 
     command
       .output(outputPath)
+      .on('stderr', (line) => {
+        stderr += `${line}\n`;
+      })
       .on('end', () => {
-        console.log(`[ExportHandler] 切片导出完成: ${outputPath}`);
-        resolve();
+        try {
+          if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+            reject(new Error(`导出结果为空文件: ${outputPath}`));
+            return;
+          }
+          console.log(`[ExportHandler] 切片导出完成: ${outputPath}`);
+          resolve();
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
       })
       .on('error', (err) => {
+        if (fs.existsSync(outputPath)) {
+          try {
+            fs.unlinkSync(outputPath);
+          } catch {
+            // 忽略清理失败
+          }
+        }
+        const detail = stderr.trim();
         console.error(`[ExportHandler] 切片导出失败: ${outputPath}`, err);
-        reject(new Error(`导出失败: ${err.message}`));
+        if (detail) {
+          console.error('[ExportHandler] FFmpeg stderr:', detail);
+        }
+        reject(new Error(detail || err.message || '导出失败'));
       })
       .run();
   });
@@ -124,49 +173,67 @@ async function exportSlicerTask(
   const sourceBasename = path.basename(sourceFilePath, path.extname(sourceFilePath));
 
   // 逐个导出切片
+  const failures: string[] = [];
+
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
 
+    const outputFilename = sanitizeFilename(`${sourceBasename}_${segment.label}.${format}`);
+    const outputPath = path.join(outputDir, outputFilename);
+
+    console.log(
+      `[ExportHandler] 开始导出切片 ${i + 1}/${segments.length}: ${segment.label}`,
+      { sourceFilePath, outputPath, startTime: segment.startTime, endTime: segment.endTime }
+    );
+
     try {
-      // 生成输出文件名
-      const outputFilename = sanitizeFilename(`${sourceBasename}_${segment.label}.${format}`);
-      const outputPath = path.join(outputDir, outputFilename);
+      await exportSegment(
+        sourceFilePath,
+        outputPath,
+        segment.startTime,
+        segment.endTime,
+        quality,
+        format
+      );
 
-      console.log(`[ExportHandler] 开始导出切片 ${i + 1}/${segments.length}: ${segment.label}`);
-
-      // 发送进度事件到渲染进程
       mainWindow.webContents.send('export-progress', {
         taskId: task.id,
         current: i + 1,
         total: segments.length,
         currentLabel: segment.label,
       });
-
-      // 执行导出
-      await exportSegment(
-        sourceFilePath,
-        outputPath,
-        segment.startTime,
-        segment.endTime,
-        quality
-      );
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error(`[ExportHandler] 切片 ${segment.label} 导出失败:`, error);
-      // 继续处理下一个切片，不中断整个流程
-      // 或者选择抛出错误中断流程：throw error;
+      failures.push(`${segment.label}: ${message}`);
     }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`部分切片导出失败 (${failures.length}/${segments.length}):\n${failures.join('\n')}`);
   }
 
   console.log(`[ExportHandler] 任务导出完成: ${task.id}`);
 }
 
+let exportHandlersRegistered = false;
+let activeMainWindow: BrowserWindow | null = null;
+
 /**
- * 注册导出相关 IPC Handlers
+ * 注册导出相关 IPC Handlers（仅注册一次，窗口引用在每次 createWindow 时更新）
  */
 export function registerExportHandler(mainWindow: BrowserWindow) {
+  activeMainWindow = mainWindow;
+
+  if (exportHandlersRegistered) {
+    return;
+  }
+  exportHandlersRegistered = true;
+
   // 选择输出目录
   ipcMain.handle('dialog:select-output-dir', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const parentWindow = activeMainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
+    const result = await dialog.showOpenDialog(parentWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: '选择输出目录',
     });
@@ -192,6 +259,11 @@ export function registerExportHandler(mainWindow: BrowserWindow) {
         throw new Error('输出目录无效');
       }
 
+      const mainWindow = activeMainWindow;
+      if (!mainWindow) {
+        throw new Error('主窗口未就绪');
+      }
+
       // 逐个处理任务
       for (const task of tasks) {
         if (task.toolId === 'slicer') {
@@ -205,7 +277,8 @@ export function registerExportHandler(mainWindow: BrowserWindow) {
       return { success: true };
     } catch (error) {
       console.error('[ExportHandler] 导出失败:', error);
-      throw error;
+      const message = error instanceof Error ? error.message : '导出失败';
+      return { success: false, error: message };
     }
   });
 }
