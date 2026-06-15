@@ -216,19 +216,22 @@ async function exportSlicerTask(
   console.log(`[ExportHandler] 任务导出完成: ${task.id}`);
 }
 
-let exportHandlersRegistered = false;
 let activeMainWindow: BrowserWindow | null = null;
 
 /**
- * 注册导出相关 IPC Handlers（仅注册一次，窗口引用在每次 createWindow 时更新）
+ * 更新导出 Handler 使用的主窗口引用
+ * @param mainWindow 新创建的主窗口实例
  */
-export function registerExportHandler(mainWindow: BrowserWindow) {
+export function updateExportMainWindow(mainWindow: BrowserWindow) {
   activeMainWindow = mainWindow;
+  console.log('[ExportHandler] 主窗口引用已更新');
+}
 
-  if (exportHandlersRegistered) {
-    return;
-  }
-  exportHandlersRegistered = true;
+/**
+ * 注册导出相关 IPC Handlers（应用启动时调用一次）
+ */
+export function registerExportHandler() {
+  console.log('[ExportHandler] 开始注册 IPC Handlers');
 
   // 选择输出目录
   ipcMain.handle('dialog:select-output-dir', async () => {
