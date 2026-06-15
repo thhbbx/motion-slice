@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MotionSlice 是一个视频切片与晃动片段识别工具，支持按时间或文件大小切分视频，并自动识别视频中的晃动时间片段。
 
+**📖 完整架构文档**：[docs/architecture.md](docs/architecture.md) — 包含极具画面感的 UI 布局描述、完整数据流链路、IPC 通信机制以及核心交互生命周期。
+
 ### 已实现功能
 - ✅ 视频智能切分：支持按时长/大小切分，预留智能断句接口
 - ✅ 三向联动：工作台列表、时间轴轨道、播放器实时同步

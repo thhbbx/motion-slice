@@ -26,9 +26,10 @@ export interface BatchSliceItem {
 }
 
 /**
- * 导出任务队列项（拍平后的一维结构）
+ * 批量导出任务队列项（拍平后的一维结构）
+ * 用于内部导出队列的执行单位，与 export.ts 中的 ExportTask 不同
  */
-export interface ExportTask {
+export interface BatchExportTask {
   id: string;                // 任务 ID
   videoPath: string;         // 源视频路径
   videoName: string;         // 视频文件名

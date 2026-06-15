@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, readonly } from 'vue';
 import type { FileNode } from '../types/file-tree';
-import type { BatchSliceGroup, ExportTask } from '../types/batch';
+import type { BatchSliceGroup, BatchExportTask } from '../types/batch';
 import { parseTimecode } from '../utils/timeFormat';
 
 export const useVideoStore = defineStore('video', () => {
@@ -15,8 +15,8 @@ export const useVideoStore = defineStore('video', () => {
 
   const isBatchMode = computed(() => selectedVideos.value.length > 1);
 
-  const exportTaskQueue = computed<ExportTask[]>(() => {
-    const tasks: ExportTask[] = [];
+  const exportTaskQueue = computed<BatchExportTask[]>(() => {
+    const tasks: BatchExportTask[] = [];
 
     for (const group of batchSliceGroups.value) {
       for (const slice of group.slices) {
