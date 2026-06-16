@@ -36,6 +36,16 @@ jobs:
       - name: 执行打包 (Make)
         run: npx electron-forge make --arch=${{ matrix.arch }}
 
+      - name: 区分 Mac 安装包名称
+        if: matrix.os == 'macos-latest'
+        run: |
+          # ${{ github.ref_name }} 会自动获取当前触发流水线的 tag (例如 v0.0.1)
+          TAG_NAME=${{ github.ref_name }}
+          find out/make -name "*.dmg" | while read file; do
+            # 结果示例: MotionSlice-v0.0.1-x64.dmg
+            mv "$file" "${file%.dmg}-${TAG_NAME}-${{ matrix.arch }}.dmg"
+          done
+
       - name: 上传安装包到 GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
