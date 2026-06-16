@@ -90,7 +90,7 @@ export const useVideoStore = defineStore('video', () => {
 
     // 场景 3: 批量 → 单选
     if (wasBatchMode && isSingleMode) {
-      cleanupBatchModeData();
+      await cleanupBatchModeData();
     }
 
     // 场景 4: 清空所有选择
@@ -98,7 +98,7 @@ export const useVideoStore = defineStore('video', () => {
       if (wasSingleMode) {
         await cleanupSingleModeData(selectedVideos.value[0]);
       } else if (wasBatchMode) {
-        cleanupBatchModeData();
+        await cleanupBatchModeData();
       }
     }
 
@@ -126,7 +126,7 @@ export const useVideoStore = defineStore('video', () => {
 
       // 场景 1: Batch -> Single (2 → 1) - 彻底清洗批量数据并初始化单选状态
       if (currentLength === 2 && afterLength === 1) {
-        cleanupBatchModeData(); // 清空整个批量状态
+        await cleanupBatchModeData(); // 清空整个批量状态
         selectedVideos.value.splice(index, 1);
 
         // 初始化剩余单选视频状态
@@ -170,7 +170,7 @@ export const useVideoStore = defineStore('video', () => {
     if (selectedVideos.value.length === 1) {
       await cleanupSingleModeData(selectedVideos.value[0]);
     } else if (selectedVideos.value.length > 1) {
-      cleanupBatchModeData();
+      await cleanupBatchModeData();
     }
 
     selectedVideos.value = [];
@@ -237,7 +237,10 @@ export const useVideoStore = defineStore('video', () => {
       sliceStore.reset();
 
       // 靶向清理导出任务：只删除该视频的 slicer 任务
+      console.log(`[VideoStore] 准备清理导出任务 - video.path: ${video.path}`);
+      console.log(`[VideoStore] 当前导出任务数量: ${exportStore.pendingTasks.length}`);
       exportStore.removeTasksBySource('slicer', video.path);
+      console.log(`[VideoStore] 清理后导出任务数量: ${exportStore.pendingTasks.length}`);
 
       console.log(`[VideoStore] 已清理单选视频 ${video.name} 的派生数据`);
     } catch (error) {
@@ -249,10 +252,41 @@ export const useVideoStore = defineStore('video', () => {
   /**
    * 清理批量模式的派生数据
    */
-  function cleanupBatchModeData() {
-    batchSliceGroups.value = [];
-    // exportTaskQueue 是 computed，会自动清空
-    console.log('[VideoStore] 已清理批量模式数据');
+  async function cleanupBatchModeData() {
+    console.log('[VideoStore] ========== 开始清理批量模式数据 V2 ==========');
+    try {
+      const { useSliceStore } = await import('./useSliceStore');
+      const { useExportStore } = await import('./useExportStore');
+
+      const sliceStore = useSliceStore();
+      const exportStore = useExportStore();
+
+      console.log('[VideoStore] Store 实例获取成功');
+
+      // 清理批量切片数据
+      batchSliceGroups.value = [];
+      console.log('[VideoStore] 已清空 batchSliceGroups');
+
+      // 清理单选模式的切片数据（如果是从单选切换到批量，需要清理单选的切片）
+      sliceStore.reset();
+      console.log('[VideoStore] 已调用 sliceStore.reset()');
+
+      // 清理导出队列中所有 slicer 相关的任务
+      // 批量模式切换时，清空所有 slicer 任务
+      const tasksToRemove = exportStore.pendingTasks.filter(t => t.toolId === 'slicer');
+      console.log('[VideoStore] 需要移除的任务数量:', tasksToRemove.length);
+
+      tasksToRemove.forEach(task => {
+        if (task.payload?.sourceFilePath) {
+          console.log('[VideoStore] 移除任务:', task.id, task.payload.sourceFilePath);
+          exportStore.removeTasksBySource('slicer', task.payload.sourceFilePath);
+        }
+      });
+
+      console.log('[VideoStore] 已清理批量模式数据');
+    } catch (error) {
+      console.error('[VideoStore] 清理批量模式数据失败:', error);
+    }
   }
 
   return {

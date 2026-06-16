@@ -82,14 +82,34 @@ export const useExportStore = defineStore('export', () => {
    */
   function removeTasksBySource(toolId: string, sourceFilePath: string) {
     const before = pendingTasks.value.length;
+    console.log(`[ExportStore] 清理前任务列表:`, pendingTasks.value.map(t => ({ id: t.id, toolId: t.toolId, source: t.payload?.sourceFilePath })));
+    console.log(`[ExportStore] 尝试清理: toolId=${toolId}, sourceFilePath=${sourceFilePath}`);
+
+    // 清理待导出任务
+    const removedTaskIds: string[] = [];
     pendingTasks.value = pendingTasks.value.filter(task => {
-      // 保留不匹配的任务
-      return !(task.toolId === toolId && task.payload?.sourceFilePath === sourceFilePath);
+      const shouldKeep = !(task.toolId === toolId && task.payload?.sourceFilePath === sourceFilePath);
+      if (!shouldKeep) {
+        removedTaskIds.push(task.id);
+        console.log(`[ExportStore] 匹配到需要删除的任务:`, task.id);
+      }
+      return shouldKeep;
     });
+
+    // 同时清理执行队列中对应的项
+    if (removedTaskIds.length > 0) {
+      queueItems.value = queueItems.value.filter(item => !removedTaskIds.includes(item.taskId));
+      console.log(`[ExportStore] 同时清理了 ${removedTaskIds.length} 个执行队列项`);
+    }
+
     const removed = before - pendingTasks.value.length;
     if (removed > 0) {
       console.log(`[ExportStore] 已移除 ${removed} 个任务 (toolId=${toolId}, source=${sourceFilePath})`);
+    } else {
+      console.warn(`[ExportStore] 没有找到匹配的任务需要移除 (toolId=${toolId}, source=${sourceFilePath})`);
     }
+    console.log(`[ExportStore] 清理后任务列表:`, pendingTasks.value.map(t => ({ id: t.id, toolId: t.toolId, source: t.payload?.sourceFilePath })));
+    console.log(`[ExportStore] 清理后队列项数量:`, queueItems.value.length);
   }
 
   /**

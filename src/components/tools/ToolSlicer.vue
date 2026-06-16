@@ -177,10 +177,10 @@ async function handleAnalyze() {
       sliceStore.setPreviewSlices(result.segments);
       // 不操作 batchSliceGroups（单选模式不触碰批量轨数据）
 
-      // 自动创建导出任务
+      // 自动创建导出任务（使用视频路径作为唯一标识，避免重复添加）
       if (result.segments.length > 0) {
         const task: ExportTask = {
-          id: `export-${Date.now()}`,
+          id: `slicer-${videos[0].path}`, // 使用视频路径保证同一视频的任务唯一
           toolId: 'slicer',
           title: '视频切片导出',
           summary: `共 ${result.segments.length} 个片段`,

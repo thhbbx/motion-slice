@@ -82,12 +82,12 @@
  * - 执行批量导出（串行队列）
  * - 实时同步导出进度
  */
-import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 
 const videoStore = useVideoStore();
-const { batchSliceGroups } = storeToRefs(videoStore);
+const { batchSliceGroups, selectedVideos } = storeToRefs(videoStore);
 
 const outputDir = ref('');
 const isExporting = ref(false);
@@ -209,6 +209,16 @@ onMounted(async () => {
     console.log('[BatchExport] ========================================');
   });
 });
+
+// 监听视频切换，清除错误状态和进度
+watch(selectedVideos, () => {
+  exportError.value = '';
+  // 清空进度状态
+  Object.keys(taskProgress).forEach(key => {
+    delete taskProgress[key];
+  });
+  console.log('[BatchExport] 视频切换，已清除错误和进度状态');
+}, { deep: true });
 
 onUnmounted(() => {
   window.motionSlice.offExportProgress();
@@ -517,6 +527,7 @@ async function handleExecute() {
   font-weight: 600;
   color: var(--vt-danger);
   flex: 1;
+  white-space: nowrap;
 }
 
 .btn-close-error {

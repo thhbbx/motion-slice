@@ -124,6 +124,16 @@
 
     <!-- 执行按钮 -->
     <div class="export-actions">
+      <!-- 错误提示面板 -->
+      <div v-if="exportError" class="error-panel">
+        <div class="error-header">
+          <span class="error-icon">⚠️</span>
+          <span class="error-title">导出失败</span>
+          <button class="btn-close-error" @click="exportError = ''" title="关闭">✕</button>
+        </div>
+        <div class="error-message">{{ exportError }}</div>
+      </div>
+
       <button
         class="vt-button-primary"
         :disabled="!canExecute"
@@ -143,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useExportStore } from '../store/useExportStore';
 import { useVideoStore } from '../store/useVideoStore';
@@ -154,7 +164,9 @@ const exportStore = useExportStore();
 const { pendingTasks, queueItems, hasPendingTasks, isExporting } = storeToRefs(exportStore);
 
 const videoStore = useVideoStore();
-const { isBatchMode } = storeToRefs(videoStore);
+const { isBatchMode, selectedVideos } = storeToRefs(videoStore);
+
+const exportError = ref(''); // 导出错误信息
 
 // 导出配置
 const exportConfig = ref({
@@ -213,6 +225,8 @@ async function handleSelectOutputDir() {
 async function handleExecuteExport() {
   if (!canExecute.value) return;
 
+  exportError.value = ''; // 清除之前的错误
+
   try {
     const taskIds = pendingTasks.value.map(t => t.id);
 
@@ -239,7 +253,8 @@ async function handleExecuteExport() {
       exportStore.setQueueStatus(item.taskId, 'failed');
     });
 
-    alert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    // 显示友好的错误信息
+    exportError.value = error instanceof Error ? error.message : '导出过程中发生未知错误';
   }
 }
 
@@ -259,6 +274,13 @@ function getStatusText(status: ExportTaskStatus): string {
 onUnmounted(() => {
   window.motionSlice.offExportProgress();
 });
+
+// 监听视频切换，清除错误状态和队列
+watch(selectedVideos, () => {
+  exportError.value = '';
+  exportStore.clearQueue(); // 清空执行队列
+  console.log('[ExportTab] 视频切换，已清除错误状态和执行队列');
+}, { deep: true });
 </script>
 
 <style scoped>
@@ -503,6 +525,78 @@ onUnmounted(() => {
 /* 执行按钮 */
 .export-actions {
   padding-top: var(--vt-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-space-3);
+}
+
+.error-panel {
+  padding: var(--vt-space-4);
+  background: var(--vt-danger-soft);
+  border: 1px solid var(--vt-danger);
+  border-radius: var(--vt-radius-md);
+  animation: slideDown 200ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  margin-bottom: var(--vt-space-2);
+}
+
+.error-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vt-danger);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.btn-close-error {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--vt-text-muted);
+  cursor: pointer;
+  border-radius: var(--vt-radius-sm);
+  transition: all 180ms ease;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.btn-close-error:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--vt-text);
+}
+
+.error-message {
+  font-size: 12px;
+  color: var(--vt-danger);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .export-actions button {
