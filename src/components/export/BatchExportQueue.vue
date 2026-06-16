@@ -42,6 +42,16 @@
 
     <!-- 执行按钮 -->
     <div class="export-actions">
+      <!-- 错误提示面板 -->
+      <div v-if="exportError" class="error-panel">
+        <div class="error-header">
+          <span class="error-icon">⚠️</span>
+          <span class="error-title">导出失败</span>
+          <button class="btn-close-error" @click="exportError = ''" title="关闭">✕</button>
+        </div>
+        <div class="error-message">{{ exportError }}</div>
+      </div>
+
       <button
         v-if="!isAllCompleted"
         class="btn-execute"
@@ -81,6 +91,7 @@ const { batchSliceGroups } = storeToRefs(videoStore);
 
 const outputDir = ref('');
 const isExporting = ref(false);
+const exportError = ref(''); // 导出错误信息
 
 // 任务进度状态（响应式对象）
 const taskProgress = reactive<Record<string, { status: string; progress: number }>>({});
@@ -224,6 +235,7 @@ async function handleExecute() {
   if (!canExecute.value) return;
 
   isExporting.value = true;
+  exportError.value = ''; // 清除之前的错误
 
   try {
     // 从 exportTaskQueue 构建完整任务列表
@@ -266,6 +278,9 @@ async function handleExecute() {
     console.log('[BatchExport] 导出完成');
   } catch (error) {
     console.error('[BatchExport] 导出失败:', error);
+
+    // 提取友好的错误信息并显示在 UI 上
+    exportError.value = error instanceof Error ? error.message : '导出过程中发生未知错误';
   } finally {
     isExporting.value = false;
   }
@@ -461,7 +476,82 @@ async function handleExecute() {
   padding: var(--vt-space-4);
   border-top: 1px solid var(--vt-border);
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: var(--vt-space-3);
+  align-items: stretch;
+}
+
+.error-panel {
+  padding: var(--vt-space-4);
+  background: var(--vt-danger-soft);
+  border: 1px solid var(--vt-danger);
+  border-radius: var(--vt-radius-md);
+  animation: slideDown 200ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  margin-bottom: var(--vt-space-2);
+}
+
+.error-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vt-danger);
+  flex: 1;
+}
+
+.btn-close-error {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--vt-text-muted);
+  cursor: pointer;
+  border-radius: var(--vt-radius-sm);
+  transition: all 180ms ease;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.btn-close-error:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--vt-text);
+}
+
+.error-message {
+  font-size: 12px;
+  color: var(--vt-danger);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.btn-execute,
+.btn-completed {
+  align-self: flex-end;
 }
 
 .btn-execute {

@@ -39,6 +39,44 @@ function ensureOutputDir(outputDir: string): void {
 }
 
 /**
+ * 检查磁盘空间是否充足
+ * @param outputDir 输出目录
+ * @param estimatedSizeBytes 预估文件大小（字节）
+ * @throws 如果空间不足则抛出错误
+ */
+function checkDiskSpace(outputDir: string, estimatedSizeBytes: number): void {
+  try {
+    const stats = fs.statfsSync ? fs.statfsSync(outputDir) : null;
+    if (!stats) {
+      console.warn('[ExportHandler] 无法检测磁盘空间（fs.statfsSync 不可用），跳过检查');
+      return;
+    }
+
+    const availableBytes = stats.bavail * stats.bsize;
+    const requiredBytes = estimatedSizeBytes * 1.1; // 预留 10% 安全边界
+
+    if (availableBytes < requiredBytes) {
+      const availableGB = (availableBytes / (1024 ** 3)).toFixed(2);
+      const requiredGB = (requiredBytes / (1024 ** 3)).toFixed(2);
+      throw new Error(
+        `目标磁盘空间不足：可用 ${availableGB} GB，需要约 ${requiredGB} GB\n` +
+        `请清理磁盘空间或更换导出目录`
+      );
+    }
+
+    const availableGB = (availableBytes / (1024 ** 3)).toFixed(2);
+    console.log(`[ExportHandler] 磁盘空间检查通过：可用 ${availableGB} GB`);
+  } catch (error) {
+    // 如果是我们主动抛出的空间不足错误，直接向上传递
+    if (error instanceof Error && error.message.includes('磁盘空间不足')) {
+      throw error;
+    }
+    // 其他错误（如 API 不支持）只打印警告，不阻塞导出
+    console.warn('[ExportHandler] 磁盘空间检查失败（将继续导出）:', error);
+  }
+}
+
+/**
  * 解析可用于 FFmpeg 的源文件路径（macOS 上统一为文件系统原生路径）
  */
 function resolveSourcePath(sourceFilePath: string): string {
@@ -58,6 +96,7 @@ function parseFFmpegError(stderr: string): string {
 
   // 查找真正的错误行（通常在最后，且包含错误关键词）
   const errorPatterns = [
+    /No space left on device/i,
     /Operation not permitted/i,
     /Permission denied/i,
     /No such file or directory/i,
@@ -73,6 +112,9 @@ function parseFFmpegError(stderr: string): string {
     for (const pattern of errorPatterns) {
       if (pattern.test(line)) {
         // 提取错误信息
+        if (line.includes('No space left on device')) {
+          return '磁盘空间不足，请清理目标磁盘后重试或更换导出目录';
+        }
         if (line.includes('Operation not permitted')) {
           const filename = line.split(':')[0].trim();
           return `文件被占用或无权限操作: ${path.basename(filename)}（可能正在被其他程序使用，请关闭后重试）`;
@@ -234,6 +276,31 @@ async function exportSlicerTask(
 
   // 确保输出目录存在
   ensureOutputDir(outputDir);
+
+  // 预估所需磁盘空间
+  try {
+    const sourceStats = fs.statSync(sourceFilePath);
+    const sourceSize = sourceStats.size;
+
+    // 计算切片总时长占比
+    const totalDuration = segments.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0);
+
+    // 估算公式：
+    // - 如果是无损导出（quality=100），约等于源文件大小 * 时长占比
+    // - 如果是压缩导出，按比例缩减（quality < 100 通常能减少 30%-50%）
+    const durationRatio = segments.length > 0 ? 1 : 0; // 简化：假设切片占满视频
+    const qualityFactor = quality === 100 ? 1.0 : 0.7; // 压缩导出预估保留 70%
+    const estimatedSize = sourceSize * durationRatio * qualityFactor * segments.length;
+
+    checkDiskSpace(outputDir, estimatedSize);
+  } catch (error) {
+    // 如果是磁盘空间不足错误，直接抛出
+    if (error instanceof Error && error.message.includes('磁盘空间不足')) {
+      throw error;
+    }
+    // 其他错误（如源文件无法读取）记录警告但继续
+    console.warn('[ExportHandler] 磁盘空间预检查失败（将继续导出）:', error);
+  }
 
   // 获取源文件名（不含扩展名）
   const sourceBasename = path.basename(sourceFilePath, path.extname(sourceFilePath));
