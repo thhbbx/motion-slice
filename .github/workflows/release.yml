@@ -18,7 +18,7 @@ jobs:
             arch: x64
           - os: macos-latest
             arch: arm64  # 打包出 Mac M芯片 (ARM) 包
-          - os: macos-13
+          - os: macos-latest
             arch: x64    # 利用交叉编译，打包出 Mac Intel (x86) 包
 
     steps:
@@ -29,6 +29,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22 # 请确认这是否与你本地开发的 Node 版本一致
+          architecture: ${{ matrix.arch }}
 
       - name: 安装依赖
         run: npm install
@@ -37,7 +38,7 @@ jobs:
         run: npx electron-forge make --arch=${{ matrix.arch }}
 
       - name: 区分 Mac 安装包名称
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest'
         run: |
           # ${{ github.ref_name }} 会自动获取当前触发流水线的 tag (例如 v0.0.1)
           TAG_NAME=${{ github.ref_name }}
