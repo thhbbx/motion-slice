@@ -15,8 +15,9 @@
           class="dir-input"
           placeholder="选择导出目录..."
           readonly
+          :disabled="isExporting"
         />
-        <button class="btn-browse" @click="handleSelectDir">浏览</button>
+        <button class="btn-browse" @click="handleSelectDir" :disabled="isExporting">浏览</button>
       </div>
     </div>
 
@@ -85,9 +86,12 @@
 import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
+import { useExportStore } from '../../store/useExportStore';
 
 const videoStore = useVideoStore();
 const { batchSliceGroups, selectedVideos } = storeToRefs(videoStore);
+
+const exportStore = useExportStore();
 
 const outputDir = ref('');
 const isExporting = ref(false);
@@ -247,6 +251,21 @@ async function handleExecute() {
   isExporting.value = true;
   exportError.value = ''; // 清除之前的错误
 
+  // 直接设置全局导出队列为 processing 状态
+  const queueItemsData = exportTasks.value.map(task => ({
+    taskId: task.id,
+    title: `${task.videoName} - ${task.sliceLabel}`,
+    status: 'processing' as const,
+    progress: 0,
+    currentIndex: 0,
+    totalCount: exportTasks.value.length,
+  }));
+
+  // 手动设置队列（绕过 initQueue 的限制）
+  exportStore.$patch({
+    queueItems: queueItemsData
+  });
+
   try {
     // 从 exportTaskQueue 构建完整任务列表
     const tasks = batchSliceGroups.value.flatMap(group => {
@@ -293,6 +312,8 @@ async function handleExecute() {
     exportError.value = error instanceof Error ? error.message : '导出过程中发生未知错误';
   } finally {
     isExporting.value = false;
+    // 清除全局导出队列
+    exportStore.clearQueue();
   }
 }
 </script>

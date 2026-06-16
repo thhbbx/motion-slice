@@ -18,6 +18,7 @@
         :checked="isSelected"
         @click.stop="handleCheckboxClick"
         class="tree-checkbox"
+        :disabled="disabled"
       />
 
       <!-- 文件夹箭头图标 -->
@@ -102,6 +103,7 @@
         :key="child.id"
         :node="child"
         :depth="depth + 1"
+        :disabled="disabled"
       />
     </div>
   </div>
@@ -117,9 +119,12 @@ import type { FileNode } from '../types/file-tree';
 interface Props {
   node: FileNode;
   depth: number;
+  disabled?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  disabled: false,
+});
 
 const fileTreeStore = useFileTreeStore();
 const videoStore = useVideoStore();

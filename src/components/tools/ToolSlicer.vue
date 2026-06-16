@@ -17,6 +17,7 @@
               value="duration"
               v-model="mode"
               class="radio-input"
+              :disabled="disabled"
             />
             <span class="radio-label">按时长</span>
           </label>
@@ -27,6 +28,7 @@
               value="size"
               v-model="mode"
               class="radio-input"
+              :disabled="disabled"
             />
             <span class="radio-label">按大小</span>
           </label>
@@ -45,6 +47,7 @@
           :min="mode === 'duration' ? 1 : 1"
           :step="mode === 'duration' ? 1 : 10"
           class="vt-input"
+          :disabled="disabled"
         />
       </div>
 
@@ -56,6 +59,7 @@
             type="checkbox"
             v-model="useOverlapHandles"
             class="vt-switch"
+            :disabled="disabled"
           />
         </label>
         <div class="form-hint vt-muted">在切口两端延伸冗余时间，便于后期转场</div>
@@ -74,6 +78,7 @@
           max="5.0"
           step="0.1"
           class="vt-slider"
+          :disabled="disabled"
         />
         <div class="form-hint vt-muted">切片边界向外扩张 {{ overlapDuration.toFixed(1) }}s，形成交叠区域</div>
       </div>
@@ -112,6 +117,14 @@ import type { ExportTask } from '../../types/export';
 import SlicerSingleMode from './SlicerSingleMode.vue';
 import SlicerBatchMode from './SlicerBatchMode.vue';
 
+interface Props {
+  disabled?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  disabled: false,
+});
+
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
 const exportStore = useExportStore();
@@ -131,7 +144,7 @@ const currentModeComponent = computed(() => {
 // 计算属性：是否可以生成预览
 const canAnalyze = computed(() => {
   const hasVideo = activeVideo.value !== null || selectedVideos.value.length > 0;
-  return hasVideo && !isAnalyzing.value && targetValue.value > 0;
+  return hasVideo && !isAnalyzing.value && !props.disabled && targetValue.value > 0;
 });
 
 const inputLabel = computed(() => {

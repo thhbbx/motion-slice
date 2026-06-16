@@ -1,15 +1,28 @@
 <template>
-  <aside class="sidebar" :style="{ width: `${sidebarWidth}px` }">
+  <aside class="sidebar" :class="{ 'sidebar-disabled': isExporting }" :style="{ width: `${sidebarWidth}px` }">
+    <!-- 导出中蒙层提示 -->
+    <div v-if="isExporting" class="sidebar-overlay">
+      <div class="overlay-message">
+        <svg class="overlay-icon" width="20" height="20" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3"/>
+          <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round">
+            <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+          </path>
+        </svg>
+        <span>导出中，请勿切换视频</span>
+      </div>
+    </div>
+
     <div class="vt-panel sidebar-panel">
       <div class="panel-header">
         <h2 class="vt-title">文件列表</h2>
         <div class="header-actions">
-          <button class="vt-button-icon" @click="showFilterModal = true" title="导入偏好设置">
+          <button class="vt-button-icon" @click="showFilterModal = true" title="导入偏好设置" :disabled="isExporting">
             <svg width="16" height="16" viewBox="0 0 16 16">
               <path d="M2 4h4M10 4h4M2 8h4M10 8h4M2 12h4M10 12h4M6 2v4M12 6v4M6 10v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
-          <button class="vt-button-ghost import-button" @click="handleImport">
+          <button class="vt-button-ghost import-button" @click="handleImport" :disabled="isExporting">
             <svg
               class="import-icon"
               width="16"
@@ -31,12 +44,12 @@
       </div>
 
       <div v-if="videoFileCount > 0" class="select-toolbar">
-        <button class="vt-button-ghost-sm" @click="handleSelectAll">
+        <button class="vt-button-ghost-sm" @click="handleSelectAll" :disabled="isExporting">
           {{ allVideosSelected ? '取消全选' : '全选' }} ({{ selectedCount }}/{{ videoFileCount }})
         </button>
       </div>
 
-      <div class="panel-content">
+      <div class="panel-content" :class="{ 'content-disabled': isExporting }">
         <!-- 空状态 -->
         <div v-if="roots.length === 0" class="empty-state">
           <div class="empty-icon">📁</div>
@@ -45,12 +58,13 @@
         </div>
 
         <!-- 文件树 -->
-        <div v-else class="file-tree">
+        <div v-else class="file-tree" :class="{ 'disabled-interactions': isExporting }">
           <FileTreeItem
             v-for="node in roots"
             :key="node.id"
             :node="node"
             :depth="0"
+            :disabled="isExporting"
           />
         </div>
       </div>
@@ -86,6 +100,7 @@ const filterStore = useImportFilterStore();
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
 const exportStore = useExportStore();
+const { isExporting } = storeToRefs(exportStore);
 const appStore = useAppStore();
 
 const sidebarWidth = ref(260);
@@ -385,5 +400,56 @@ function handleResizeEnd() {
 
 .resize-handle:hover {
   background: var(--vt-border-strong);
+}
+
+/* 导出时禁用状态 */
+.sidebar {
+  position: relative;
+}
+
+.sidebar-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.overlay-message {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3) var(--vt-space-4);
+  background: var(--vt-bg-elevated);
+  border: 1px solid var(--vt-border-strong);
+  border-radius: var(--vt-radius-lg);
+  color: var(--vt-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.overlay-icon {
+  flex-shrink: 0;
+  color: var(--vt-primary);
+}
+
+.content-disabled {
+  overflow: hidden !important;
+}
+
+.disabled-interactions {
+  pointer-events: none;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

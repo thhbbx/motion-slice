@@ -24,6 +24,7 @@
           v-for="tab in tabs"
           :key="tab.id"
           :class="['tab-button', { active: activeTab === tab.id }]"
+          :disabled="tab.id === 'workbench' && isExporting"
           @click="activeTab = tab.id"
         >
           {{ tab.label }}
@@ -116,7 +117,7 @@
         </div>
 
         <!-- 工作台 Tab -->
-        <div v-else-if="activeTab === 'workbench'" class="tab-pane">
+        <div v-else-if="activeTab === 'workbench'" class="tab-pane workbench-pane">
           <div v-if="selectedVideos.length > 1" class="batch-mode-banner">
             <svg width="16" height="16" viewBox="0 0 16 16">
               <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5"/>
@@ -124,9 +125,9 @@
             <span>当前规则将应用于选中的 {{ selectedVideos.length }} 个视频</span>
           </div>
 
-          <div class="tool-selector">
+          <div class="tool-selector" :class="{ 'disabled-section': isExporting }">
             <label class="tool-label">选择工具</label>
-            <select v-model="currentTool" class="tool-select">
+            <select v-model="currentTool" class="tool-select" :disabled="isExporting">
               <option
                 v-for="tool in toolOptions"
                 :key="tool.value"
@@ -137,8 +138,8 @@
             </select>
           </div>
 
-          <div class="tool-container">
-            <component :is="currentTool === 'slicer' ? ToolSlicer : null" />
+          <div class="tool-container" :class="{ 'disabled-section': isExporting }">
+            <component :is="currentTool === 'slicer' ? ToolSlicer : null" :disabled="isExporting" />
           </div>
         </div>
 
@@ -176,11 +177,15 @@
 import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
+import { useExportStore } from '../store/useExportStore';
 import ToolSlicer from './tools/ToolSlicer.vue';
 import ExportTab from './ExportTab.vue';
 
 const videoStore = useVideoStore();
 const { activeVideo, focusedVideo, isBatchMode, isFetchingMetadata, selectedVideos } = storeToRefs(videoStore);
+
+const exportStore = useExportStore();
+const { isExporting } = storeToRefs(exportStore);
 
 // 属性面板显示：优先使用 focusedVideo，fallback 到 activeVideo
 const displayVideo = computed(() => focusedVideo.value || activeVideo.value);
@@ -725,4 +730,35 @@ function formatCreatedTime(metadata: any): string {
 .skeleton-codec { width: 40px; }
 .skeleton-bitrate { width: 60px; }
 .skeleton-time { width: 100px; }
+
+/* Tab 按钮禁用状态 */
+.tab-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.tab-button:disabled:hover {
+  background: transparent;
+  color: var(--vt-text-secondary);
+}
+
+/* 工作台禁用状态 */
+.disabled-section {
+  opacity: 0.6;
+  pointer-events: none;
+  user-select: none;
+  position: relative;
+}
+
+.disabled-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  cursor: not-allowed;
+}
 </style>
