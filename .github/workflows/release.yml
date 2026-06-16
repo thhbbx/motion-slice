@@ -12,8 +12,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # 同时启动两台云主机：一台 Windows，一台 Mac
-        os: [windows-latest, macos-latest]
+        # 使用 include 来明确指定操作系统和对应的 CPU 架构
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: macos-latest
+            arch: arm64  # 打包出 Mac M芯片 (ARM) 包
+          - os: macos-latest
+            arch: x64    # 利用交叉编译，打包出 Mac Intel (x86) 包
 
     steps:
       - name: 检出代码
@@ -28,7 +34,7 @@ jobs:
         run: npm install
 
       - name: 执行打包 (Make)
-        run: npm run make
+        run: npx electron-forge make --arch=${{ matrix.arch }}
 
       - name: 上传安装包到 GitHub Releases
         uses: softprops/action-gh-release@v2

@@ -11,6 +11,7 @@
     "make": "electron-forge make",
     "make:win": "electron-forge make --targets=@electron-forge/maker-squirrel",
     "make:mac": "electron-forge make --targets=@electron-forge/maker-dmg",
+    "make:mac:x64": "electron-forge make --targets=@electron-forge/maker-dmg --arch=x64",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx ."
   },
