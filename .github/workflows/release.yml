@@ -16,9 +16,9 @@ jobs:
         include:
           - os: windows-latest
             arch: x64
-          - os: macos-latest
+          - os: macos-26
             arch: arm64  # 打包出 Mac M芯片 (ARM) 包
-          - os: macos-latest
+          - os: macos-26-intel
             arch: x64    # 利用交叉编译，打包出 Mac Intel (x86) 包
 
     steps:
@@ -31,20 +31,31 @@ jobs:
           node-version: 22 # 请确认这是否与你本地开发的 Node 版本一致
 
       - name: 安装依赖
-        env:
-          npm_config_arch: ${{ matrix.arch }}
         run: npm install
+
+      - name: 验证 Mac ffmpeg / ffprobe 架构
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          echo "runner arch: $(uname -m)"
+          echo "target arch: ${{ matrix.arch }}"
+
+          FFMPEG_PATH=$(node -p "require('ffmpeg-static')")
+          FFPROBE_PATH=$(node -p "require('ffprobe-static').path")
+
+          echo "ffmpeg: $FFMPEG_PATH"
+          file "$FFMPEG_PATH"
+
+          echo "ffprobe: $FFPROBE_PATH"
+          file "$FFPROBE_PATH"
 
       - name: 执行打包 (Make)
         run: npx electron-forge make --arch=${{ matrix.arch }}
 
       - name: 区分 Mac 安装包名称
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
-          # ${{ github.ref_name }} 会自动获取当前触发流水线的 tag (例如 v0.0.1)
           TAG_NAME=${{ github.ref_name }}
           find out/make -name "*.dmg" | while read file; do
-            # 结果示例: MotionSlice-v0.0.1-x64.dmg
             mv "$file" "${file%.dmg}-${TAG_NAME}-${{ matrix.arch }}.dmg"
           done
 
