@@ -49,6 +49,67 @@ function resolveSourcePath(sourceFilePath: string): string {
 }
 
 /**
+ * 从 FFmpeg stderr 中提取真正的错误信息
+ * @param stderr FFmpeg 完整输出
+ * @returns 简化的、人类可读的错误信息
+ */
+function parseFFmpegError(stderr: string): string {
+  const lines = stderr.trim().split('\n');
+
+  // 查找真正的错误行（通常在最后，且包含错误关键词）
+  const errorPatterns = [
+    /Operation not permitted/i,
+    /Permission denied/i,
+    /No such file or directory/i,
+    /Invalid argument/i,
+    /already exists/i,
+    /Conversion failed/i,
+    /Error /i,
+  ];
+
+  // 从后往前找第一个匹配的错误行
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    for (const pattern of errorPatterns) {
+      if (pattern.test(line)) {
+        // 提取错误信息
+        if (line.includes('Operation not permitted')) {
+          const filename = line.split(':')[0].trim();
+          return `文件被占用或无权限操作: ${path.basename(filename)}（可能正在被其他程序使用，请关闭后重试）`;
+        }
+        if (line.includes('Permission denied')) {
+          return '权限不足，无法写入目标文件';
+        }
+        if (line.includes('No such file or directory')) {
+          return '源文件不存在或路径无效';
+        }
+        if (line.includes('already exists')) {
+          return '目标文件已存在';
+        }
+        // 返回原始错误行（去除路径前缀）
+        return line.replace(/^.*:\s*/, '');
+      }
+    }
+  }
+
+  // 如果没有找到明确的错误模式，返回最后几行（排除 FFmpeg 版本信息）
+  const relevantLines = lines.filter(line =>
+    !line.startsWith('ffmpeg version') &&
+    !line.startsWith('built with') &&
+    !line.startsWith('configuration:') &&
+    !line.startsWith('lib') &&
+    !line.startsWith('Input #') &&
+    !line.startsWith('Output #') &&
+    !line.startsWith('Stream #') &&
+    !line.startsWith('Metadata:') &&
+    !line.trim().startsWith('Duration:') &&
+    line.trim().length > 0
+  );
+
+  return relevantLines.slice(-3).join(' ').trim() || '导出失败';
+}
+
+/**
  * 导出单个视频切片
  * @param sourceFilePath 源视频路径
  * @param outputPath 输出文件路径
@@ -134,12 +195,17 @@ function exportSegment(
             // 忽略清理失败
           }
         }
-        const detail = stderr.trim();
-        console.error(`[ExportHandler] 切片导出失败: ${outputPath}`, err);
-        if (detail) {
-          console.error('[ExportHandler] FFmpeg stderr:', detail);
+
+        // 完整的技术细节打印到控制台
+        console.error(`[ExportHandler] 切片导出失败: ${outputPath}`);
+        console.error('[ExportHandler] FFmpeg 错误对象:', err);
+        if (stderr.trim()) {
+          console.error('[ExportHandler] FFmpeg 完整输出:\n', stderr);
         }
-        reject(new Error(detail || err.message || '导出失败'));
+
+        // 提取人类可读的错误信息
+        const userFriendlyError = parseFFmpegError(stderr);
+        reject(new Error(userFriendlyError));
       })
       .run();
   });
@@ -204,13 +270,19 @@ async function exportSlicerTask(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // 完整的错误信息仅打印到控制台
       console.error(`[ExportHandler] 切片 ${segment.label} 导出失败:`, error);
+      // 用户界面只显示简化的错误信息
       failures.push(`${segment.label}: ${message}`);
     }
   }
 
   if (failures.length > 0) {
-    throw new Error(`部分切片导出失败 (${failures.length}/${segments.length}):\n${failures.join('\n')}`);
+    // 只在弹框中显示失败数量和简要信息，不包含 FFmpeg 技术细节
+    const errorSummary = failures.map(f => `  • ${f}`).join('\n');
+    throw new Error(
+      `部分切片导出失败 (${failures.length}/${segments.length}):\n\n${errorSummary}\n\n详细错误信息已打印到控制台`
+    );
   }
 
   console.log(`[ExportHandler] 任务导出完成: ${task.id}`);
