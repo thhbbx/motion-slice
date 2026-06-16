@@ -29,9 +29,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22 # 请确认这是否与你本地开发的 Node 版本一致
-          architecture: ${{ matrix.arch }}
 
       - name: 安装依赖
+        env:
+          npm_config_arch: ${{ matrix.arch }}
         run: npm install
 
       - name: 执行打包 (Make)
