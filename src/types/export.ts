@@ -58,6 +58,13 @@ export interface ExportQueueItem {
   currentIndex?: number;
   /** 总片段数（可选） */
   totalCount?: number;
+  /** 视频路径（用于匹配进度事件） */
+  videoPath?: string;
+  /** 切片标签（用于匹配进度事件） */
+  sliceLabel?: string;
+}
+  /** 总片段数（可选） */
+  totalCount?: number;
   /** 错误信息（仅当 status 为 'failed' 时存在） */
   error?: string;
 }

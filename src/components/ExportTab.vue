@@ -153,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useExportStore } from '../store/useExportStore';
 import { useVideoStore } from '../store/useVideoStore';
@@ -183,19 +183,6 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取默认下载路径失败:', error);
   }
-
-  // 监听导出进度事件
-  window.motionSlice.onExportProgress((event) => {
-    console.log('[ExportTab] 收到进度事件:', event);
-    exportStore.updateQueueProgress(event.taskId, event.current, event.total);
-
-    // 如果完成，更新状态
-    if (event.current >= event.total) {
-      exportStore.setQueueStatus(event.taskId, 'success');
-    } else {
-      exportStore.setQueueStatus(event.taskId, 'processing');
-    }
-  });
 });
 
 // 计算属性：是否可以执行导出
@@ -270,10 +257,6 @@ function getStatusText(status: ExportTaskStatus): string {
   };
   return statusMap[status] || '未知';
 }
-
-onUnmounted(() => {
-  window.motionSlice.offExportProgress();
-});
 
 // 监听视频切换，清除错误状态和队列
 watch(selectedVideos, () => {

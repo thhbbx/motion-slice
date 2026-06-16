@@ -217,6 +217,9 @@ async function handleAnalyze() {
       const videoList = videos.map(v => ({ path: v.path, id: v.id, name: v.name }));
       const groups = await window.motionSlice.batchAnalyzeSlices(videoList, params);
       videoStore.setBatchSliceGroups(groups);
+
+      // 清空之前的导出队列（重新扫描后，旧的导出结果已失效）
+      exportStore.clearQueue();
     }
   } catch (error) {
     console.error('切片分析失败:', error);

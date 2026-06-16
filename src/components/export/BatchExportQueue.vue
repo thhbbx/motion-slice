@@ -83,7 +83,7 @@
  * - 执行批量导出（串行队列）
  * - 实时同步导出进度
  */
-import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useExportStore } from '../../store/useExportStore';
@@ -92,30 +92,33 @@ const videoStore = useVideoStore();
 const { batchSliceGroups, selectedVideos } = storeToRefs(videoStore);
 
 const exportStore = useExportStore();
+const { queueItems } = storeToRefs(exportStore);
 
 const outputDir = ref('');
 const isExporting = ref(false);
 const exportError = ref(''); // 导出错误信息
-
-// 任务进度状态（响应式对象）
-const taskProgress = reactive<Record<string, { status: string; progress: number }>>({});
 
 // 导出任务队列（动态计算，实时过滤禁用切片）
 const exportTasks = computed(() => {
   return batchSliceGroups.value.flatMap(group => {
     return group.slices
       .filter(s => s.isActive)
-      .map(slice => {
-        const taskId = `${slice.id}`; // 使用 slice.id 作为唯一标识
-        const progress = taskProgress[taskId] || { status: 'pending', progress: 0 };
+      .map((slice, index) => {
+        const taskId = `${group.videoPath}-slice-${index}`; // 与队列初始化时的格式一致
+
+        // 从 exportStore 的 queueItems 获取状态
+        const queueItem = queueItems.value.find(q => q.taskId === taskId);
+        const status = queueItem?.status || 'pending';
+        const progress = queueItem?.progress || 0;
+
         return {
           id: taskId,
           videoId: group.videoId,
           videoPath: group.videoPath,
           videoName: group.videoName,
           sliceLabel: slice.label,
-          status: progress.status,
-          progress: progress.progress
+          status,
+          progress
         };
       });
   });
@@ -135,7 +138,7 @@ const activeCount = computed(() => exportTasks.value.length);
 const totalTasks = computed(() => exportTasks.value.length);
 
 const completedCount = computed(() => {
-  return exportTasks.value.filter(t => t.status === 'completed').length;
+  return exportTasks.value.filter(t => t.status === 'success').length;
 });
 
 const overallProgress = computed(() => {
@@ -159,7 +162,7 @@ function statusText(status: string) {
   const map: Record<string, string> = {
     pending: '等待中',
     processing: '处理中',
-    completed: '已完成',
+    success: '已完成',
     failed: '失败'
   };
   return map[status] || status;
@@ -173,60 +176,14 @@ onMounted(async () => {
   } catch (error) {
     console.warn('[BatchExport] 获取默认下载目录失败:', error);
   }
-
-  // 监听导出进度
-  window.motionSlice.onExportProgress((event) => {
-    console.log('[BatchExport] ========== 收到进度事件 ==========');
-    console.log('[BatchExport] event.taskId:', event.taskId);
-    console.log('[BatchExport] event.currentLabel:', event.currentLabel);
-    console.log('[BatchExport] event.current:', event.current, '/', event.total);
-
-    // 提取纯净的 videoId（移除 'export-' 前缀）
-    const extractedVideoId = event.taskId.replace(/^export-/, '');
-    console.log('[BatchExport] 提取的 videoId:', extractedVideoId);
-
-    const allTasks = exportTasks.value;
-    console.log('[BatchExport] 当前任务列表总数:', allTasks.length);
-
-    // 复合键精确匹配：videoPath + sliceLabel
-    const matchingTask = allTasks.find(t =>
-      t.videoPath === extractedVideoId && t.sliceLabel === event.currentLabel
-    );
-
-    if (!matchingTask) {
-      console.error('[BatchExport] ❌ 未找到匹配的任务！');
-      console.error('[BatchExport] 尝试匹配的 videoPath:', extractedVideoId);
-      console.error('[BatchExport] 尝试匹配的 label:', event.currentLabel);
-      return;
-    }
-
-    console.log('[BatchExport] ✅ 找到匹配任务 ID:', matchingTask.id);
-    console.log('[BatchExport] ✅ 匹配的切片:', matchingTask.sliceLabel);
-
-    console.log('[BatchExport] 更新前状态:', taskProgress[matchingTask.id]);
-
-    // 单体任务直接竣工：收到进度事件 = 该切片已处理完毕
-    taskProgress[matchingTask.id] = { status: 'completed', progress: 100 };
-
-    console.log('[BatchExport] 更新后状态:', taskProgress[matchingTask.id]);
-    console.log('[BatchExport] 当前已完成任务数:', Object.values(taskProgress).filter(p => p.status === 'completed').length);
-    console.log('[BatchExport] ========================================');
-  });
 });
 
-// 监听视频切换，清除错误状态和进度
+// 监听视频切换，清除错误状态和导出队列
 watch(selectedVideos, () => {
   exportError.value = '';
-  // 清空进度状态
-  Object.keys(taskProgress).forEach(key => {
-    delete taskProgress[key];
-  });
-  console.log('[BatchExport] 视频切换，已清除错误和进度状态');
+  exportStore.clearQueue();
+  console.log('[BatchExport] 视频切换，已清除错误状态和导出队列');
 }, { deep: true });
-
-onUnmounted(() => {
-  window.motionSlice.offExportProgress();
-});
 
 function handleOpenOutputDir() {
   if (outputDir.value) {
@@ -252,14 +209,21 @@ async function handleExecute() {
   exportError.value = ''; // 清除之前的错误
 
   // 直接设置全局导出队列为 processing 状态
-  const queueItemsData = exportTasks.value.map(task => ({
-    taskId: task.id,
-    title: `${task.videoName} - ${task.sliceLabel}`,
-    status: 'processing' as const,
-    progress: 0,
-    currentIndex: 0,
-    totalCount: exportTasks.value.length,
-  }));
+  // 为每个切片创建队列项，taskId 格式：videoPath-slice-index
+  const queueItemsData = batchSliceGroups.value.flatMap(group => {
+    return group.slices
+      .filter(s => s.isActive)
+      .map((slice, index) => ({
+        taskId: `${group.videoPath}-slice-${index}`, // 使用 videoPath + slice index 作为唯一 ID
+        videoPath: group.videoPath, // 保存 videoPath 用于匹配
+        sliceLabel: slice.label, // 保存标签用于匹配
+        title: `${group.videoName} - ${slice.label}`,
+        status: 'processing' as const,
+        progress: 0,
+        currentIndex: 0,
+        totalCount: 0,
+      }));
+  });
 
   // 手动设置队列（绕过 initQueue 的限制）
   exportStore.$patch({
@@ -291,8 +255,6 @@ async function handleExecute() {
       };
     });
 
-    console.log('[BatchExport] 准备导出:', tasks);
-
     const result = await window.motionSlice.executeExport({
       tasks,
       outputDir: outputDir.value,
@@ -312,8 +274,8 @@ async function handleExecute() {
     exportError.value = error instanceof Error ? error.message : '导出过程中发生未知错误';
   } finally {
     isExporting.value = false;
-    // 清除全局导出队列
-    exportStore.clearQueue();
+    // 不自动清空队列，让用户查看导出结果
+    // 队列会在视频切换或重新扫描时自动清空
   }
 }
 </script>
@@ -418,11 +380,11 @@ async function handleExecute() {
   background: var(--vt-bg-soft);
 }
 
-.task-item.completed {
+.task-item.success {
   opacity: 1;
 }
 
-.task-item.completed .task-status {
+.task-item.success .task-status {
   color: rgba(16, 185, 129, 0.9);
   font-weight: 600;
 }

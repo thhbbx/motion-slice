@@ -44,6 +44,11 @@ export const useExportStore = defineStore('export', () => {
       item.currentIndex = current;
       item.totalCount = total;
       item.progress = total > 0 ? Math.round((current / total) * 100) : 0;
+
+      // 如果完成了，设置为 completed 状态
+      if (current === total && total > 0) {
+        item.status = 'completed';
+      }
     }
   }
 
