@@ -46,6 +46,7 @@
 │  - 窗口管理                                                        │
 │  - IPC 路由                                                        │
 │  - Worker 线程池调度                                               │
+│  - 应用退出协调（before-quit 钩子）                                │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │         WorkerPoolManager (线程池管理器)                    │  │
@@ -54,6 +55,7 @@
 │  │  - 任务队列 + 负载均衡                                      │  │
 │  │  - 健康监控（超时检测、崩溃恢复）                            │  │
 │  │  - 生命周期管理（空闲超时自动销毁）                          │  │
+│  │  - 优雅关闭协调（广播 shutdown 信号）                        │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                           │                                      │
 │         ┌─────────────────┼─────────────────┐                    │
@@ -66,10 +68,16 @@
 │  │          │      │          │      │          │               │
 │  │ FFprobe  │      │ FFprobe  │      │ FFprobe  │               │
 │  │  Task    │      │  Task    │      │  Task    │               │
+│  │          │      │          │      │          │               │
+│  │ 持有子进程│      │ 持有子进程│      │ 持有子进程│               │
+│  │ 引用     │      │ 引用     │      │ 引用     │               │
 │  └──────────┘      └──────────┘      └──────────┘               │
 │       ↓                  ↓                  ↓                    │
-│  任务完成后                                                       │
-│  堆内存彻底释放                                                   │
+│  收到 shutdown 信号时：                                           │
+│  1. 终止 ffprobe 子进程（childProcess.kill()）                   │
+│  2. 返回 shutdown-ack 确认                                        │
+│  3. 退出 Worker（process.exit(0)）                                │
+│  4. 堆内存彻底释放                                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,14 +92,26 @@
    │                    │──────────────────────────→ │
    │                    │                             │ [Worker 1 空闲]
    │                    │                             │ 执行 execFile(ffprobe)
+   │                    │                             │ 保存 ChildProcess 引用
    │                    │                             │ 解析 JSON
    │                    │                             │
    │                    │  ← return metadata          │
    │                    │←───────────────────────────│
    │  ← IPC response    │                             │
    │←──────────────────│                             │
-   │                    │                             │ [Worker 1 终止]
-   │                    │                             │ 堆内存释放
+   │                    │                             │ [Worker 1 空闲]
+   │                    │                             │ 清空子进程引用
+   │                    │                             │
+   │  [应用退出]        │                             │
+   │                    │  broadcast shutdown         │
+   │                    │──────────────────────────→ │
+   │                    │                             │ 所有 Worker 收到信号
+   │                    │                             │ 终止 ffprobe 子进程
+   │                    │  ← shutdown-ack (x3)        │
+   │                    │←───────────────────────────│
+   │                    │  [等待所有确认]              │
+   │                    │  [销毁线程池]                │
+   │                    │  [应用安全退出]              │
 ```
 
 ---
@@ -105,15 +125,17 @@
 **职责**:
 - 在独立的 V8 堆空间中执行单个 ffprobe 任务
 - 调用 `execFile(ffprobe, [filePath])` 获取视频元数据
+- **保持底层子进程引用**：必须保留 `execFile()` 返回的 `ChildProcess` 实例，用于强制终止卡死的 ffprobe 进程
 - 解析 JSON 并返回结构化数据
 - 处理错误并返回失败消息
+- **响应优雅关闭信号**：接收 `shutdown` 消息时，主动终止正在执行的 ffprobe 子进程并退出
 
 **接口定义**:
 
 ```typescript
 // 输入消息（从主进程接收）
 interface WorkerTaskMessage {
-  type: 'ffprobe-task';
+  type: 'ffprobe-task' | 'shutdown';  // 新增 shutdown 类型
   taskId: string;           // 任务唯一 ID
   filePath: string;         // 视频文件绝对路径
   ffprobePath: string;      // ffprobe 可执行文件路径
@@ -121,7 +143,7 @@ interface WorkerTaskMessage {
 
 // 输出消息（发送给主进程）
 interface WorkerResultMessage {
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'shutdown-ack';  // 新增 shutdown-ack 类型
   taskId: string;
   data?: VideoMetadata;     // 成功时返回元数据
   error?: string;           // 失败时返回错误信息
@@ -141,15 +163,38 @@ interface VideoMetadata {
 ```
 
 **实现要点**:
-- 使用 `parentPort.on('message')` 监听任务
+- 使用 `parentPort.on('message')` 监听任务和关闭信号
 - 复用现有的格式化函数（`formatFileSize`, `formatDuration` 等）
 - 使用 `execFile()` 替代 `fluent-ffmpeg`（减少依赖）
+- **底层子进程引用管理**：
+  ```typescript
+  let currentChildProcess: ChildProcess | null = null;
+  
+  parentPort.on('message', (msg: WorkerTaskMessage) => {
+    if (msg.type === 'shutdown') {
+      // 强制终止正在执行的 ffprobe 子进程
+      if (currentChildProcess) {
+        currentChildProcess.kill('SIGKILL');  // Windows 使用 'SIGKILL'，Linux/macOS 使用 'SIGTERM'
+      }
+      parentPort.postMessage({ type: 'shutdown-ack', taskId: msg.taskId });
+      process.exit(0);
+      return;
+    }
+    
+    // 执行任务时保存子进程引用
+    currentChildProcess = execFile(ffprobePath, args, (err, stdout) => {
+      currentChildProcess = null;  // 任务完成后清空引用
+      // ... 处理结果
+    });
+  });
+  ```
+- **Why**：仅靠 `worker.terminate()` 无法杀死底层的 C++ 子进程。必须显式调用 `childProcess.kill()` 才能释放被锁定的视频文件句柄，防止出现僵尸进程。
 - 超时控制：单个任务最长 30 秒，超时自动终止
 - 错误处理：捕获所有异常并返回可读错误消息
 
 **生命周期**:
 ```
-启动 → 监听消息 → 执行任务 → 返回结果 → 等待下一个任务（或空闲超时后退出）
+启动 → 监听消息 → 执行任务 → 返回结果 → 等待下一个任务 → 收到 shutdown 信号 → 终止子进程 → 退出
 ```
 
 ---
@@ -163,6 +208,7 @@ interface VideoMetadata {
 - 接收 ffprobe 任务请求，分配给空闲 Worker
 - 任务队列管理（Worker 全忙时自动排队）
 - 健康监控（检测 Worker 崩溃、超时，自动重启）
+- **优雅关闭协调**：应用退出时向所有 Worker 广播 `shutdown` 信号，等待确认后销毁线程池
 - 生命周期管理（应用退出时销毁所有 Worker）
 
 **类接口**:
@@ -196,7 +242,16 @@ class WorkerPoolManager {
   ): Promise<VideoMetadata[]>;
   
   /**
-   * 销毁线程池（应用退出时调用）
+   * 优雅关闭线程池（应用退出时调用）
+   * 向所有 Worker 发送 shutdown 信号，等待确认后销毁
+   * @param timeout 等待超时时间（毫秒，默认 5000）
+   * @returns Promise<void>
+   */
+  async shutdown(timeout?: number): Promise<void>;
+  
+  /**
+   * 强制销毁线程池（紧急情况使用）
+   * 立即终止所有 Worker，不等待确认
    */
   destroy(): void;
   
@@ -218,6 +273,7 @@ interface WorkerState {
   worker: Worker;           // Worker 线程实例
   isBusy: boolean;          // 是否正在执行任务
   currentTaskId: string | null;  // 当前任务 ID
+  currentChildProcess: ChildProcess | null;  // 当前执行的 ffprobe 子进程引用（用于强制终止）
   lastActiveTime: number;   // 最后活跃时间戳
 }
 
@@ -243,16 +299,33 @@ interface PendingTask {
 
 3. **超时处理**:
    - 每个任务设置 `taskTimeout` 定时器
-   - 超时后强制终止 Worker（`worker.terminate()`）
+   - 超时后执行两步终止流程：
+     1. **先杀死底层子进程**：通过 Worker 通信获取 `ChildProcess` 引用并调用 `kill()`
+     2. **再终止 Worker**：调用 `worker.terminate()` 清理 Worker 线程
    - 重新创建新 Worker 补充线程池
    - 任务 Promise 返回超时错误
+   - **Why**：仅调用 `worker.terminate()` 只能终止 Worker 的 JavaScript 层，无法杀死已启动的 ffprobe C++ 子进程。必须先显式杀死子进程，否则会出现僵尸进程锁定视频文件。
 
 4. **崩溃恢复**:
    - 监听 Worker 的 `error` 和 `exit` 事件
+   - Worker 退出时检查是否有正在执行的任务
+   - 如有正在执行的任务，尝试通过操作系统 API 终止可能残留的 ffprobe 进程（通过 PID 追踪）
    - 崩溃时自动创建新 Worker 替换
    - 当前任务返回失败，排队任务不受影响
 
-5. **批量任务优化**:
+5. **优雅关闭机制（Poison Pill）**:
+   - 应用退出时（`app.on('before-quit')`）调用 `shutdown()` 方法
+   - 向所有 Worker 广播 `{ type: 'shutdown' }` 消息
+   - 每个 Worker 收到信号后：
+     1. 停止接收新任务
+     2. 终止当前正在执行的 ffprobe 子进程（调用 `childProcess.kill()`）
+     3. 返回 `{ type: 'shutdown-ack' }` 确认消息
+     4. 调用 `process.exit(0)` 退出
+   - 主进程等待所有 Worker 确认（最长等待 5 秒）
+   - 所有 Worker 退出后才允许应用关闭
+   - **Why**：防止应用退出瞬间出现文件损坏或未捕获异常。确保所有底层子进程彻底清理完毕。
+
+6. **批量任务优化**:
    - `submitBatch()` 内部使用 `Promise.allSettled()`
    - 并发控制：同时最多 `maxWorkers` 个任务执行
    - 单个任务失败不影响其他任务
@@ -266,6 +339,9 @@ interface PendingTask {
 | **超时强制终止**          | 防止卡死任务占用线程池。某些损坏的视频文件可能导致 ffprobe 无限等待。 |
 | **Promise 封装**          | 简化调用方代码。调用者无需关心 Worker 通信细节，直接 `await` 结果。 |
 | **崩溃自动恢复**          | 提升鲁棒性。即使 Worker 意外崩溃，线程池仍能继续服务。               |
+| **保持子进程引用**        | 仅 `worker.terminate()` 无法杀死底层 C++ 进程。必须持有 `ChildProcess` 引用并调用 `kill()` 才能彻底清理，防止僵尸进程锁定文件。 |
+| **Poison Pill 优雅关闭**  | 防止应用退出时出现文件损坏或未捕获异常。广播 `shutdown` 信号确保所有底层资源（子进程、文件句柄）彻底释放。 |
+| **ESM 标准 Worker 加载**  | 避免手动拼接 `app.isPackaged` 路径的脆弱做法。使用 `new URL(..., import.meta.url)` 让 Vite 自动处理开发/生产环境路径映射。 |
 
 ---
 
@@ -393,9 +469,30 @@ parentPort.postMessage({
 - 支持 JSON 可序列化的类型（对象、数组、字符串、数字、布尔值、null）
 - 不支持函数、Symbol、DOM 对象
 
-### 4.2 Vite 构建配置
+### 4.2 Vite 构建配置与 Worker 路径加载
 
-Worker 线程脚本需要单独打包为独立的 JS 文件。
+Worker 线程脚本需要单独打包为独立的 JS 文件，并在运行时正确加载。
+
+#### 4.2.1 使用现代 ESM 标准语法（推荐）
+
+**Worker 创建（在 WorkerPoolManager 中）**:
+```typescript
+import { Worker } from 'worker_threads';
+
+// 使用 ESM 标准的 import.meta.url 动态解析路径
+// Vite 会在构建时自动处理这个语法
+const worker = new Worker(
+  new URL('../workers/ffprobe-worker.ts', import.meta.url)
+);
+```
+
+**Why 选择这种方式**:
+- ✅ **构建工具自动处理**：Vite 会自动识别 `new URL(..., import.meta.url)` 语法，在开发环境和生产环境中生成正确的路径
+- ✅ **避免相对路径地狱**：无需手动判断 `app.isPackaged` 或拼接 `process.resourcesPath`
+- ✅ **符合 ESM 标准**：这是 Node.js 官方推荐的 Worker 加载方式（Node.js 12+ 支持）
+- ✅ **类型安全**：TypeScript 可以正确解析 `import.meta.url` 类型
+
+#### 4.2.2 配置 Vite 支持 Worker 线程
 
 **修改 `vite.main.config.ts`**:
 ```typescript
@@ -403,36 +500,99 @@ import { defineConfig } from 'vite';
 import path from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@workers': path.resolve(__dirname, 'src/main/workers'),
+    }
+  },
   build: {
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'src/main.ts'),
-        // 新增 Worker 线程入口
-        'ffprobe-worker': path.resolve(__dirname, 'src/main/workers/ffprobe-worker.ts')
       },
       output: {
-        entryFileNames: '[name].js'  // 输出为 ffprobe-worker.js
+        entryFileNames: '[name].js',
+        // 确保 Worker 文件输出到正确位置
+        chunkFileNames: 'chunks/[name]-[hash].js'
+      }
+    }
+  },
+  worker: {
+    format: 'es',  // 使用 ESM 格式
+    rollupOptions: {
+      output: {
+        entryFileNames: 'workers/[name].js'  // Worker 文件输出到 workers 子目录
       }
     }
   }
 });
 ```
 
-**Worker 路径解析**:
-```typescript
-import path from 'path';
-import { app } from 'electron';
+**Why 使用 Vite 的 `worker` 配置**:
+- Vite 5+ 内置了对 Worker 线程的支持
+- 使用 `new URL(..., import.meta.url)` 时，Vite 会自动将 Worker 文件打包到独立的 chunk
+- 无需手动配置多入口，构建工具自动处理依赖关系
 
+#### 4.2.3 开发环境 vs 生产环境
+
+使用 `new URL(..., import.meta.url)` 后，路径解析在两种环境下的表现：
+
+**开发环境**:
+```
+new URL('../workers/ffprobe-worker.ts', import.meta.url)
+→ file:///D:/projects/motion-slice/.vite/build/workers/ffprobe-worker.js
+```
+
+**生产环境（ASAR 打包后）**:
+```
+new URL('../workers/ffprobe-worker.ts', import.meta.url)
+→ file:///C:/Users/xxx/AppData/Local/motion-slice/resources/app.asar/workers/ffprobe-worker.js
+```
+
+Vite 和 Electron 会自动处理这些路径转换，无需手动干预。
+
+#### 4.2.4 避免的反模式（不推荐）
+
+**❌ 错误做法：手动拼接路径**
+```typescript
+// 脆弱且容易出错
 function getWorkerPath(): string {
   if (app.isPackaged) {
-    // 生产环境：从 app.asar 中加载
     return path.join(process.resourcesPath, 'app.asar', '.vite', 'build', 'ffprobe-worker.js');
   } else {
-    // 开发环境：从 out 目录加载
     return path.join(__dirname, 'ffprobe-worker.js');
   }
 }
+
+const worker = new Worker(getWorkerPath());
 ```
+
+**为什么不推荐**:
+- ❌ 路径硬编码，Vite 更新后可能失效
+- ❌ 需要手动维护开发/生产双套逻辑
+- ❌ ASAR 路径可能因 Electron Forge 配置不同而变化
+- ❌ 无法利用 Vite 的自动优化（代码分割、Tree Shaking）
+
+#### 4.2.5 Electron Forge 配置
+
+确保 Forge 配置支持 Worker 文件打包：
+
+**`forge.config.ts`**:
+```typescript
+export default {
+  packagerConfig: {
+    asar: {
+      unpack: '**/*.node',  // 原生模块解包
+    }
+  },
+  // Worker 文件会被自动打包到 ASAR 中，无需特殊配置
+};
+```
+
+**Why Worker 文件可以留在 ASAR 内**:
+- Worker 脚本是纯 JavaScript，不涉及原生二进制
+- Node.js 可以直接从 ASAR 内加载 JS 文件
+- 只有原生模块（`.node`）和外部可执行文件（ffprobe）需要解包
 
 ### 4.3 错误处理策略
 
@@ -442,8 +602,10 @@ function getWorkerPath(): string {
 | **ffprobe 执行失败**      | 捕获 `execFile` 错误，返回 `{ type: 'error', error: 'ffprobe 解析失败: ...' }` |
 | **JSON 解析失败**         | 捕获 `JSON.parse` 异常，返回 `{ type: 'error', error: 'ffprobe 输出解析失败' }` |
 | **Worker 崩溃**           | 主进程检测到 `worker.on('exit')`，重建 Worker，当前任务返回失败        |
-| **任务超时（> 30 秒）**   | 主进程强制终止 Worker，重建新 Worker，任务返回超时错误                  |
+| **任务超时（> 30 秒）**   | 主进程先杀死 ffprobe 子进程（`childProcess.kill()`），再终止 Worker（`worker.terminate()`），重建新 Worker，任务返回超时错误 |
 | **堆内存不足（OOM）**     | Worker 自动终止，主进程检测到退出事件，重建 Worker                      |
+| **僵尸进程残留**          | Worker 退出前必须调用 `childProcess.kill()` 终止底层 ffprobe 进程      |
+| **应用异常退出**          | `app.on('before-quit')` 触发优雅关闭，广播 `shutdown` 信号，等待所有 Worker 确认后退出 |
 
 **错误传播链**:
 ```
@@ -452,6 +614,14 @@ Worker 内部异常
   → WorkerPoolManager 接收 
   → Promise.reject(new Error(...)) 
   → 调用方的 catch 块处理
+```
+
+**子进程终止优先级**:
+```
+1. 正常完成：任务完成后自动清空 currentChildProcess 引用
+2. 任务超时：主进程通过 Worker 通信发送终止指令 → Worker 调用 childProcess.kill()
+3. Worker 崩溃：主进程检测到退出事件，通过操作系统 API 查找并终止残留进程
+4. 应用退出：广播 shutdown 信号 → 所有 Worker 主动终止子进程
 ```
 
 ### 4.4 性能优化点
@@ -515,27 +685,63 @@ Worker 内部异常
 2. 实现 Worker 创建、复用、销毁逻辑
 3. 实现任务队列和负载均衡
 4. 添加健康监控和崩溃恢复
-5. 导出单例工厂函数
+5. 实现优雅关闭机制（`shutdown()` 方法）
+6. 导出单例工厂函数
 
-### Phase 3: 现有代码重构（约 1 小时）
+### Phase 3: 主进程退出钩子集成（约 0.5 小时）
+1. 在 `src/main.ts` 中注册 `app.on('before-quit')` 钩子
+2. 实现优雅关闭流程：
+   ```typescript
+   import { getWorkerPoolManager } from './workers/worker-pool-manager';
+   
+   app.on('before-quit', async (event) => {
+     // 阻止立即退出
+     event.preventDefault();
+     
+     try {
+       console.log('[Main] 应用退出中，正在关闭 Worker 线程池...');
+       const pool = getWorkerPoolManager();
+       
+       // 等待所有 Worker 优雅关闭（最长 5 秒）
+       await pool.shutdown(5000);
+       
+       console.log('[Main] Worker 线程池已安全关闭');
+     } catch (error) {
+       console.error('[Main] Worker 关闭超时，强制退出:', error);
+       // 超时后强制销毁
+       const pool = getWorkerPoolManager();
+       pool.destroy();
+     } finally {
+       // 允许应用真正退出
+       app.quit();
+     }
+   });
+   ```
+3. 验证应用退出时无残留进程（使用任务管理器检查）
+
+### Phase 4: 现有代码重构（约 1 小时）
 1. 修改 `metadata-handler.ts` 的 `parseVideoMetadata()`
 2. 修改 `slice-handler.ts` 的 `getVideoDuration()`
 3. 修改 `video-scanner.ts` 的批量扫描逻辑
 4. 确保所有调用方无需修改代码
 
-### Phase 4: 构建配置（约 0.5 小时）
-1. 修改 `vite.main.config.ts` 添加 Worker 入口
-2. 实现 Worker 路径解析（开发环境 vs 生产环境）
-3. 测试打包后的 Worker 加载
+### Phase 5: 构建配置（约 0.5 小时）
+1. 修改 `vite.main.config.ts` 添加 Worker 配置
+2. 在 WorkerPoolManager 中使用 `new Worker(new URL(..., import.meta.url))`
+3. 测试开发环境和打包后的 Worker 加载
 
-### Phase 5: 测试验证（约 1 小时）
+### Phase 6: 测试验证（约 1.5 小时）
 1. **单视频测试**：777MB 视频切片分析，验证内存不增长
 2. **批量测试**：扫描 10 个大视频，验证并发控制和内存隔离
 3. **压力测试**：连续分析 50 个视频，验证无崩溃
 4. **错误测试**：损坏视频、不存在文件，验证错误处理
-5. **性能测试**：对比优化前后的解析耗时
+5. **子进程清理测试**：
+   - 任务执行中强制关闭应用，检查是否有残留 ffprobe 进程
+   - 使用任务管理器（Windows）或 `ps aux | grep ffprobe`（Linux/macOS）验证
+6. **超时终止测试**：模拟超时场景，验证子进程是否被正确终止
+7. **性能测试**：对比优化前后的解析耗时
 
-**总计**: 约 5 小时开发 + 1 小时测试 = **6 小时**
+**总计**: 约 5.5 小时开发 + 1.5 小时测试 = **7 小时**
 
 ---
 
@@ -544,10 +750,14 @@ Worker 内部异常
 | 风险                          | 缓解措施                                                                 |
 |-------------------------------|--------------------------------------------------------------------------|
 | **Worker 线程兼容性**         | Node.js 12+ 和 Electron 4+ 原生支持，无兼容性问题                        |
-| **打包后 Worker 路径错误**    | 使用 `app.isPackaged` 判断，提供开发/生产双路径                          |
+| **打包后 Worker 路径错误**    | 使用 `new URL(..., import.meta.url)` 标准语法，Vite 自动处理路径映射    |
 | **Worker 启动开销**           | 线程池复用机制，单次启动后可处理多个任务                                 |
 | **任务超时导致用户体验差**    | 设置合理的超时时间（30 秒），并在 UI 显示超时提示                        |
 | **线程池配置不合理**          | 提供可配置的 `maxWorkers` 参数，可根据用户机器性能动态调整               |
+| **僵尸进程锁定视频文件**      | Worker 内保持 `ChildProcess` 引用，超时/崩溃/退出时显式调用 `kill()` 终止 |
+| **应用异常退出导致进程残留**  | 注册 `app.on('before-quit')` 钩子，广播 `shutdown` 信号，等待所有 Worker 确认后退出 |
+| **Worker 崩溃时子进程残留**   | 主进程检测到 Worker 退出时，通过操作系统 API 清理可能残留的子进程        |
+| **Vite 构建配置复杂**         | 使用 ESM 标准的 `import.meta.url`，简化构建配置，无需手动多入口设置      |
 
 ---
 
