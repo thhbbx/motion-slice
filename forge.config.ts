@@ -4,8 +4,6 @@ import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
-import path from 'path';
-import fs from 'fs';
 
 const config: ForgeConfig = {
   // 核心打包配置：决定了你应用的基础信息和文件打包方式

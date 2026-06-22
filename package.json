@@ -1,7 +1,7 @@
 {
   "name": "motion-slice",
   "productName": "motion-slice",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MotionSlice - Video slicing and shake detection tool",
   "main": ".vite/build/main.js",
   "private": true,

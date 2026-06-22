@@ -19,7 +19,7 @@ jobs:
           - os: macos-26
             arch: arm64  # 打包出 Mac M芯片 (ARM) 包
           - os: macos-26-intel
-            arch: x64    # 利用交叉编译，打包出 Mac Intel (x86) 包
+            arch: x64    # 在 Intel runner 上打包 Mac Intel x64 包
 
     steps:
       - name: 检出代码
