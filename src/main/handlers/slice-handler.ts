@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { execFile } from 'node:child_process';
-import fs from 'node:fs';
+import * as fs from 'node:fs';
 import { getFfprobePath } from '../utils/ffprobe-helper';
 import type { SliceAnalyzeParams, SliceAnalyzeResult, VideoSegment } from '../../types/slice';
 import type { BatchSliceGroup } from '../../types/batch';
@@ -24,39 +24,18 @@ function ensureFfprobePath(): string {
  * 使用 ffprobe 直接解析视频元数据
  */
 async function getVideoDuration(filePath: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const ffprobePath = ensureFfprobePath(); // 延迟获取路径
+  console.log('[getVideoDuration] 通过 Worker 池获取时长:', filePath);
 
-    const args = [
-      '-v', 'error',
-      '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
-      filePath
-    ];
+  // 导入 Worker 池管理器
+  const { getWorkerPoolManager } = await import('../workers/worker-pool-manager');
+  const pool = getWorkerPoolManager();
 
-    execFile(ffprobePath, args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) {
-        console.error('[getVideoDuration] ffprobe 错误:', err.message);
-        if (stderr) {
-          console.error('[getVideoDuration] stderr:', stderr);
-        }
-        reject(new Error(`获取视频时长失败: ${err.message}`));
-        return;
-      }
+  // 从完整元数据中提取时长
+  const metadata = await pool.submitTask(filePath);
 
-      try {
-        const duration = parseFloat(stdout.trim());
-        if (isNaN(duration) || duration <= 0) {
-          reject(new Error('视频时长无效'));
-          return;
-        }
-        resolve(duration);
-      } catch (parseError) {
-        console.error('[getVideoDuration] 解析错误:', parseError);
-        reject(new Error('解析视频时长失败'));
-      }
-    });
-  });
+  // 解析格式化的时长字符串（"00:20:00"）为秒数
+  const [h, m, s] = metadata.duration.split(':').map(Number);
+  return h * 3600 + m * 60 + s;
 }
 
 /**

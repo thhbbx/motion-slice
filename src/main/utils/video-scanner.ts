@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { FileNode } from '../../types/file-tree';
 import { parseVideoMetadata } from '../handlers/metadata-handler';
 
@@ -120,26 +120,39 @@ async function hydrateMetadata(fileTree: FileNode[]): Promise<void> {
   const videoNodes = collectVideoNodes(fileTree);
   console.log(`[video-scanner] 发现 ${videoNodes.length} 个视频，启动并发解析`);
 
-  // 并发解析所有视频元数据（Promise.allSettled 保证单个失败不影响全局）
-  const results = await Promise.allSettled(
-    videoNodes.map(async (node) => {
-      try {
-        const metadata = await parseVideoMetadata(node.path);
-        node.metadata = metadata; // 直接修改引用，回填完整元数据
-        console.log(`[video-scanner] ✅ ${node.name} 解析完成`);
-      } catch (error) {
-        console.error(`[video-scanner] ❌ ${node.name} 解析失败:`, error);
-        // 解析失败时保留基础信息，避免 UI 显示空白
-        node.metadata = {
-          size: '-- MB',
-          duration: '--:--:--',
-          resolution: '--',
-        };
-      }
-    })
-  );
+  // 使用 Worker 池的批量方法
+  const { getWorkerPoolManager } = await import('../workers/worker-pool-manager');
+  const pool = getWorkerPoolManager();
 
-  const successCount = results.filter(r => r.status === 'fulfilled').length;
+  const filePaths = videoNodes.map(node => node.path);
+  const metadataResults = await pool.submitBatch(filePaths, (current, total) => {
+    console.log(`[video-scanner] 解析进度: ${current}/${total}`);
+  });
+
+  // 回填元数据到节点（注意：submitBatch 返回的顺序与输入一致，但失败的会被过滤为 null）
+  let successCount = 0;
+  for (let i = 0; i < videoNodes.length; i++) {
+    const metadata = metadataResults[i];
+    if (metadata) {
+      videoNodes[i].metadata = metadata;
+      console.log(`[video-scanner] ✅ ${videoNodes[i].name} 解析完成`);
+      successCount++;
+    } else {
+      console.error(`[video-scanner] ❌ ${videoNodes[i].name} 解析失败`);
+      // 解析失败时保留基础信息，避免 UI 显示空白
+      videoNodes[i].metadata = {
+        size: '-- MB',
+        duration: '--:--:--',
+        resolution: '--',
+        fps: '--',
+        videoCodec: '--',
+        audioCodec: '--',
+        bitrate: '--',
+        createdAt: '--',
+      };
+    }
+  }
+
   console.log(`[video-scanner] 元数据解析完成: ${successCount}/${videoNodes.length} 成功`);
 }
 

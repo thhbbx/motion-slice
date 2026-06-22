@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import path from 'node:path';
+import * as path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerDialogHandlers } from './main/handlers/dialog-handler';
 import { registerShellHandlers } from './main/handlers/shell-handler';
@@ -55,6 +55,46 @@ app.on('ready', () => {
   registerSliceHandler();
   registerExportHandler();
   createWindow();
+});
+
+// 防止重复触发 before-quit
+let isQuitting = false;
+
+// 应用退出前优雅关闭 Worker 线程池
+app.on('before-quit', async (event) => {
+  if (isQuitting) {
+    // 已经在关闭流程中，允许退出
+    return;
+  }
+
+  // 第一次触发，阻止立即退出
+  event.preventDefault();
+  isQuitting = true;
+
+  console.log('[Main] 应用退出中，正在关闭 Worker 线程池...');
+
+  try {
+    const { getWorkerPoolManager } = await import('./main/workers/worker-pool-manager');
+    const pool = getWorkerPoolManager();
+
+    // 等待所有 Worker 优雅关闭（最长 5 秒）
+    await pool.shutdown(5000);
+
+    console.log('[Main] Worker 线程池已安全关闭');
+  } catch (error) {
+    console.error('[Main] Worker 关闭超时或失败:', error);
+    // 超时后强制销毁
+    try {
+      const { getWorkerPoolManager } = await import('./main/workers/worker-pool-manager');
+      const pool = getWorkerPoolManager();
+      pool.destroy();
+    } catch (destroyError) {
+      console.error('[Main] 强制销毁失败:', destroyError);
+    }
+  } finally {
+    // 允许应用真正退出
+    app.quit();
+  }
 });
 
 // 当所有窗口关闭时退出应用，macOS 除外

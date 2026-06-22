@@ -771,4 +771,185 @@ Worker 内部异常
 4. **视频帧提取**：批量提取关键帧
 5. **AI 模型推理**：集成 ONNX Runtime 进行本地推理
 
+---
+
+## 实现中发现的问题及解决方案
+
+### 问题 1: TypeScript 导入语法错误
+
+**问题描述**：
+在多个文件中使用 `import fs from 'node:fs'` 和 `import path from 'node:path'` 导致 TypeScript 编译错误：
+```
+error TS1192: Module '"node:fs"' has no default export.
+error TS1259: Module '"node:path"' can only be default-imported using the 'esModuleInterop' flag
+```
+
+**根本原因**：
+Node.js 内置模块在 TypeScript 中没有默认导出，必须使用命名空间导入。
+
+**解决方案**：
+```typescript
+// ❌ 错误
+import fs from 'node:fs';
+import path from 'node:path';
+
+// ✅ 正确
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+```
+
+**影响的文件**：
+- `src/main/workers/ffprobe-worker.ts`
+- `src/main/utils/ffprobe-helper.ts`
+- `src/main/handlers/metadata-handler.ts`
+- `src/main/handlers/slice-handler.ts`
+- `src/main/utils/video-scanner.ts`
+- `src/main.ts`
+
+---
+
+### 问题 2: Worker 文件路径加载失败
+
+**问题描述**：
+应用启动后死循环报错：
+```
+Error: Cannot find module 'D:\projects\freelance\motion-slice\.vite\build\ffprobe-worker.js'
+[WorkerPoolManager] Worker 崩溃: Error: Worker 异常退出，code=1
+```
+
+**根本原因**：
+最初计划使用 `new URL('./ffprobe-worker.ts', import.meta.url)` 的 ESM 标准语法，但遇到两个问题：
+1. TypeScript 编译器对 `import.meta` 的模块设置要求严格，报错 `TS1343`
+2. Vite 并未自动将 Worker 文件编译为独立的 `.js` 文件
+
+尝试在 `vite.main.config.ts` 中手动添加 Worker 入口导致主进程入口冲突：
+```typescript
+// ❌ 导致 "Cannot find module main.js" 错误
+build: {
+  rollupOptions: {
+    input: {
+      'ffprobe-worker': path.resolve(__dirname, 'src/main/workers/ffprobe-worker.ts')
+    }
+  }
+}
+```
+
+**解决方案**：
+采用**内联 Worker 代码**的方式，避免文件路径问题：
+
+```typescript
+private createWorker(): WorkerState {
+  const workerCode = `
+    const { parentPort } = require('worker_threads');
+    // ... Worker 完整代码作为字符串
+  `;
+  
+  const worker = new Worker(workerCode, { eval: true });
+  // ...
+}
+```
+
+**Why 选择内联方案**：
+- ✅ **零依赖文件路径**：不需要处理开发环境 vs 生产环境路径差异
+- ✅ **不干扰 Vite 配置**：Electron Forge 自动管理主进程入口，无需手动配置
+- ✅ **构建简单**：Worker 代码随主进程一起编译，无需额外构建步骤
+- ⚠️ **权衡**：Worker 代码作为字符串维护，失去 TypeScript 类型检查（但代码简单，风险可控）
+
+**替代方案（未采用）**：
+如果未来 Worker 代码变得复杂，可以考虑使用 Vite Plugin 或自定义 Rollup 插件来正确处理 Worker 文件。
+
+---
+
+### 问题 3: 应用退出时死循环
+
+**问题描述**：
+关闭应用时控制台飞速循环输出：
+```
+[WorkerPoolManager] 线程池已在关闭中
+[Main] Worker 线程池已安全关闭
+[Main] 应用退出中，正在关闭 Worker 线程池...
+[WorkerPoolManager] 线程池已在关闭中
+[Main] Worker 线程池已安全关闭
+...
+```
+
+**根本原因**：
+`before-quit` 钩子中调用 `app.quit()` 会再次触发 `before-quit` 事件，形成死循环：
+
+```typescript
+// ❌ 导致死循环
+app.on('before-quit', async (event) => {
+  event.preventDefault();
+  await pool.shutdown();
+  app.quit();  // 再次触发 before-quit
+});
+```
+
+**解决方案**：
+添加 `isQuitting` 标志位防止重复触发：
+
+```typescript
+let isQuitting = false;
+
+app.on('before-quit', async (event) => {
+  if (isQuitting) {
+    return;  // 已经在关闭流程中，允许退出
+  }
+  
+  event.preventDefault();
+  isQuitting = true;
+  
+  await pool.shutdown();
+  app.quit();  // 此时 isQuitting=true，不会再次阻止
+});
+```
+
+**影响文件**：
+- `src/main.ts`
+
+---
+
+### 问题 4: video-scanner 批量任务返回值不匹配
+
+**问题描述**：
+`submitBatch` 返回的结果数组可能包含 `null`（失败的任务），但 `hydrateMetadata` 期望数组索引与 `videoNodes` 一一对应。
+
+**解决方案**：
+在 `hydrateMetadata` 中正确处理失败的任务：
+
+```typescript
+const metadataResults = await pool.submitBatch(filePaths, ...);
+
+// 回填时检查 null
+for (let i = 0; i < videoNodes.length; i++) {
+  const metadata = metadataResults[i];
+  if (metadata) {
+    videoNodes[i].metadata = metadata;
+  } else {
+    // 失败时提供占位符
+    videoNodes[i].metadata = {
+      size: '-- MB',
+      duration: '--:--:--',
+      // ...
+    };
+  }
+}
+```
+
+**影响文件**：
+- `src/main/utils/video-scanner.ts`
+
+---
+
+### 总结：实际实现与原设计的偏差
+
+| 设计项 | 原计划 | 实际实现 | 原因 |
+|--------|--------|----------|------|
+| Worker 加载方式 | `new URL(..., import.meta.url)` | 内联字符串 `{ eval: true }` | Vite 配置冲突 + TypeScript 限制 |
+| Vite 配置 | 添加 `worker.rollupOptions` | 保持默认（空配置） | Electron Forge 入口管理冲突 |
+| 导入语法 | `import fs from 'node:fs'` | `import * as fs from 'node:fs'` | TypeScript 类型系统要求 |
+| 退出钩子 | 直接调用 `app.quit()` | 添加 `isQuitting` 标志位 | 防止 `before-quit` 循环触发 |
+
+**核心功能均已实现，架构设计未改变，只是工程实现细节有所调整。**
+
 **设计原则**：任何可能阻塞主线程或消耗大量内存的任务，都应该迁移到 Worker 线程。
