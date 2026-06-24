@@ -198,8 +198,8 @@ async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnal
   if (targetValue <= 0) {
     throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
   }
-  if (overlapDuration < 0 || overlapDuration > 5) {
-    throw new Error(`交叠缓冲时长必须在 0-5 秒之间，当前值: ${overlapDuration}`);
+  if (overlapDuration < 0 || overlapDuration > 30) {
+    throw new Error(`交叠缓冲时长必须在 0-30 秒之间，当前值: ${overlapDuration}`);
   }
 
   // 文件路径验证
