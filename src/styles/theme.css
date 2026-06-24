@@ -217,3 +217,16 @@
     border-radius: var(--vt-radius-sm);
     animation: vt-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* --- 输入框样式增强 --- */
+/* 隐藏 number 类型输入框的原生上下调整按钮（Spinners） */
+.video-tool-page input[type="number"]::-webkit-inner-spin-button,
+.video-tool-page input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.video-tool-page input[type="number"] {
+    -moz-appearance: textfield; /* Firefox 兼容 */
+    appearance: textfield;
+}
