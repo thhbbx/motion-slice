@@ -35,20 +35,42 @@
         </div>
       </div>
 
-      <!-- 数值输入 -->
+      <!-- 目标时长输入：输入框 + 单位切换器 -->
       <div class="form-row">
         <label class="form-label">
           <span class="label-text">{{ inputLabel }}</span>
         </label>
-        <input
-          type="number"
-          v-model.number="targetValue"
-          :placeholder="inputPlaceholder"
-          :min="mode === 'duration' ? 1 : 1"
-          :step="mode === 'duration' ? 1 : 10"
-          class="vt-input"
-          :disabled="disabled"
-        />
+        <div class="input-with-unit">
+          <input
+            type="number"
+            v-model.number="displayValue"
+            :placeholder="inputPlaceholder"
+            :min="targetUnit === 'minutes' ? 1 : 1"
+            :step="targetUnit === 'minutes' ? 1 : 10"
+            class="vt-input"
+            :disabled="disabled"
+          />
+          <div v-if="mode === 'duration'" class="unit-toggle">
+            <button
+              type="button"
+              class="unit-option"
+              :class="{ active: targetUnit === 'minutes' }"
+              @click="targetUnit = 'minutes'"
+              :disabled="disabled"
+            >
+              分钟
+            </button>
+            <button
+              type="button"
+              class="unit-option"
+              :class="{ active: targetUnit === 'seconds' }"
+              @click="targetUnit = 'seconds'"
+              :disabled="disabled"
+            >
+              秒
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 交叠缓冲开关 -->
@@ -75,12 +97,12 @@
           type="range"
           v-model.number="overlapDuration"
           min="0.0"
-          max="5.0"
+          max="30.0"
           step="0.1"
           class="vt-slider"
           :disabled="disabled"
         />
-        <div class="form-hint vt-muted">切片边界向外扩张 {{ overlapDuration.toFixed(1) }}s，形成交叠区域</div>
+        <div class="form-hint vt-muted">切片边界向外扩张 {{ overlapDuration.toFixed(1) }}s，形成交叠区域（最大 30s）</div>
       </div>
     </div>
 
@@ -107,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, markRaw } from 'vue';
+import { ref, computed, markRaw, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useSliceStore } from '../../store/useSliceStore';
@@ -133,9 +155,31 @@ const { activeVideo, selectedVideos, isBatchMode } = storeToRefs(videoStore);
 const { isAnalyzing } = storeToRefs(sliceStore);
 
 const mode = ref<'duration' | 'size'>('duration');
-const targetValue = ref<number>(60);
+const targetUnit = ref<'minutes' | 'seconds'>('minutes'); // 新增：单位状态，默认分钟
+const displayValue = ref<number>(20); // 新增：UI 展示值，默认 20 分钟
+const targetValue = ref<number>(1200); // 修改默认值为 1200 秒（20 分钟）
 const useOverlapHandles = ref<boolean>(false);
-const overlapDuration = ref<number>(1.0);
+const overlapDuration = ref<number>(10.0); // 修改默认值：1.0 → 10.0
+
+// 新增：监听单位切换，自动转换数值
+watch(targetUnit, (newUnit, oldUnit) => {
+  if (oldUnit && newUnit !== oldUnit) {
+    if (newUnit === 'seconds' && oldUnit === 'minutes') {
+      // 分钟 → 秒：乘以 60
+      displayValue.value = Math.round(displayValue.value * 60);
+    } else if (newUnit === 'minutes' && oldUnit === 'seconds') {
+      // 秒 → 分钟：除以 60，保留整数
+      displayValue.value = Math.round(displayValue.value / 60);
+    }
+  }
+});
+
+// 新增：监听展示值变化，同步更新实际秒数值
+watch(displayValue, (newVal) => {
+  if (mode.value === 'duration') {
+    targetValue.value = targetUnit.value === 'minutes' ? newVal * 60 : newVal;
+  }
+});
 
 const currentModeComponent = computed(() => {
   return isBatchMode.value ? markRaw(SlicerBatchMode) : markRaw(SlicerSingleMode);
@@ -148,17 +192,26 @@ const canAnalyze = computed(() => {
 });
 
 const inputLabel = computed(() => {
-  return mode.value === 'duration' ? '目标时长 (秒)' : '目标大小 (MB)';
+  if (mode.value === 'size') return '目标大小 (MB)';
+  return '目标时长';
 });
 
 const inputPlaceholder = computed(() => {
-  return mode.value === 'duration' ? '60' : '50';
+  if (mode.value === 'size') return '50';
+  return targetUnit.value === 'minutes' ? '20' : '1200';
 });
 
 // 方法
 function handleModeChange(newMode: 'duration' | 'size') {
   mode.value = newMode;
-  targetValue.value = newMode === 'duration' ? 60 : 50;
+  if (newMode === 'duration') {
+    targetUnit.value = 'minutes';
+    displayValue.value = 20;
+    targetValue.value = 1200;
+  } else {
+    displayValue.value = 50;
+    targetValue.value = 50;
+  }
 }
 
 /**
@@ -277,6 +330,60 @@ async function handleAnalyze() {
 .form-hint {
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* 输入框与单位切换器组合容器 */
+.input-with-unit {
+  display: flex;
+  gap: var(--vt-space-2);
+  align-items: center;
+}
+
+.input-with-unit .vt-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 单位切换器（macOS 分段控制风格） */
+.unit-toggle {
+  display: flex;
+  background: var(--vt-bg-soft);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.unit-option {
+  flex: 1;
+  height: 32px;
+  min-width: 56px;
+  padding: 0 var(--vt-space-3);
+  border: none;
+  border-radius: calc(var(--vt-radius-sm) - 2px);
+  background: transparent;
+  color: var(--vt-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+
+.unit-option:hover:not(:disabled) {
+  color: var(--vt-text-regular);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.unit-option.active {
+  background: var(--vt-primary);
+  color: var(--vt-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.unit-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Radio 按钮组 */
