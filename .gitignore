@@ -124,3 +124,6 @@ tmp/
 temp/
 uploads/
 exports/verification.log
+
+# Git worktrees
+.worktrees/
