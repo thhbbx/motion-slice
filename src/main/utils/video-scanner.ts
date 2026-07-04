@@ -11,10 +11,36 @@ function isVideoFile(filePath: string): boolean {
 }
 
 /**
+ * 检查路径是否应该被忽略
+ * - __MACOSX 目录（macOS 元数据目录）
+ * - 以 ._ 开头的文件（macOS 资源分支文件）
+ */
+function shouldIgnorePath(filePath: string): boolean {
+  const name = path.basename(filePath);
+
+  // 忽略 __MACOSX 目录
+  if (name === '__MACOSX') {
+    return true;
+  }
+
+  // 忽略以 ._ 开头的文件（macOS 资源分支）
+  if (name.startsWith('._')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * 递归扫描目录，收集所有视频文件路径（同步）
  */
 function scanDirectoryRecursive(dirPath: string): FileNode | null {
   try {
+    // 检查是否应该忽略此路径
+    if (shouldIgnorePath(dirPath)) {
+      return null;
+    }
+
     const stats = fs.statSync(dirPath);
     const name = path.basename(dirPath);
 
