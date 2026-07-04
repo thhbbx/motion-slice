@@ -12,14 +12,51 @@
       @click="handleNodeClick"
       :title="node.name"
     >
-      <input
-        v-if="node.type === 'file'"
-        type="checkbox"
-        :checked="isSelected"
-        @click.stop="handleCheckboxClick"
+      <!-- 自定义复选框（目录 + 文件） -->
+      <div
         class="tree-checkbox"
-        :disabled="disabled"
-      />
+        :class="{
+          'checkbox-checked': checkboxState === 'checked',
+          'checkbox-indeterminate': checkboxState === 'indeterminate',
+          'checkbox-unchecked': checkboxState === 'unchecked'
+        }"
+        @click.stop="handleCheckboxClick"
+        :title="props.node.type === 'directory' ? '点击选择该目录下所有视频' : ''"
+      >
+        <!-- 全选：勾选图标 -->
+        <svg
+          v-if="checkboxState === 'checked'"
+          class="checkbox-icon"
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+        >
+          <path
+            d="M3 8L7 12L13 4"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            fill="none"
+          />
+        </svg>
+
+        <!-- 半选：横线符号 -->
+        <svg
+          v-else-if="checkboxState === 'indeterminate'"
+          class="checkbox-icon"
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+        >
+          <path
+            d="M4 8H12"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
 
       <!-- 文件夹箭头图标 -->
       <svg
@@ -116,6 +153,8 @@ import { useFileTreeStore } from '../store/file-tree';
 import { useVideoStore } from '../store/useVideoStore';
 import type { FileNode } from '../types/file-tree';
 
+type CheckboxState = 'unchecked' | 'indeterminate' | 'checked';
+
 interface Props {
   node: FileNode;
   depth: number;
@@ -143,6 +182,43 @@ const isExpanded = computed(() => {
   return props.node.type === 'directory' && fileTreeStore.isDirectoryExpanded(props.node.id);
 });
 
+function collectVideosInDirectory(node: FileNode): FileNode[] {
+  const videos: FileNode[] = [];
+
+  if (node.type === 'file') {
+    videos.push(node);
+  } else if (node.children) {
+    for (const child of node.children) {
+      videos.push(...collectVideosInDirectory(child));
+    }
+  }
+
+  return videos;
+}
+
+function calculateCheckboxState(directoryNode: FileNode): CheckboxState {
+  const allVideos = collectVideosInDirectory(directoryNode);
+
+  if (allVideos.length === 0) return 'unchecked';
+
+  const selectedCount = allVideos.filter(video =>
+    videoStore.selectedVideos.some(sv => sv.id === video.id)
+  ).length;
+
+  if (selectedCount === 0) return 'unchecked';
+  if (selectedCount === allVideos.length) return 'checked';
+  return 'indeterminate';
+}
+
+const checkboxState = computed<CheckboxState>(() => {
+  if (props.node.type === 'file') {
+    return isSelected.value ? 'checked' : 'unchecked';
+  }
+
+  // 目录节点：计算三态
+  return calculateCheckboxState(props.node);
+});
+
 function handleNodeClick(event: MouseEvent) {
   if (props.node.type === 'directory') {
     fileTreeStore.toggleDirectory(props.node.id);
@@ -155,8 +231,13 @@ function handleNodeClick(event: MouseEvent) {
 }
 
 function handleCheckboxClick() {
-  // 多选框：切换选中状态
-  videoStore.toggleVideoSelection(props.node);
+  if (props.node.type === 'file') {
+    // 文件：复用现有逻辑
+    videoStore.toggleVideoSelection(props.node);
+  } else {
+    // 目录：调用新方法
+    videoStore.toggleDirectorySelection(props.node);
+  }
 }
 </script>
 
@@ -212,11 +293,56 @@ function handleCheckboxClick() {
 }
 
 .tree-checkbox {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  border: 1.5px solid var(--vt-border-strong);
+  border-radius: 4px;
   cursor: pointer;
-  accent-color: var(--vt-primary);
+  transition: all 160ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.tree-checkbox:hover {
+  border-color: var(--vt-primary);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+/* 未选状态 */
+.checkbox-unchecked {
+  background: transparent;
+}
+
+/* 半选状态 */
+.checkbox-indeterminate {
+  background: rgba(139, 92, 246, 0.6);
+  border-color: var(--vt-primary);
+}
+
+/* 全选状态 */
+.checkbox-checked {
+  background: var(--vt-primary);
+  border-color: var(--vt-primary);
+}
+
+/* 勾选动画 */
+.checkbox-icon {
+  color: #ffffff;
+  animation: checkboxPop 180ms ease-out;
+}
+
+@keyframes checkboxPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .tree-icon-folder,

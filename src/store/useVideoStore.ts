@@ -289,6 +289,104 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
+  /**
+   * 递归收集目录下所有视频文件
+   */
+  function collectVideosInDirectory(node: FileNode): FileNode[] {
+    const videos: FileNode[] = [];
+
+    if (node.type === 'file') {
+      videos.push(node);
+    } else if (node.children) {
+      for (const child of node.children) {
+        videos.push(...collectVideosInDirectory(child));
+      }
+    }
+
+    return videos;
+  }
+
+  /**
+   * 切换目录的选中状态（级联选择所有子视频）
+   */
+  async function toggleDirectorySelection(directoryNode: FileNode) {
+    const allVideos = collectVideosInDirectory(directoryNode);
+
+    if (allVideos.length === 0) {
+      console.log('[VideoStore] 目录下没有视频文件，忽略级联选择操作');
+      return;
+    }
+
+    console.log(`[VideoStore] 目录 "${directoryNode.name}" 下收集到 ${allVideos.length} 个视频`);
+
+    // 计算当前状态
+    const selectedCount = allVideos.filter(video =>
+      selectedVideos.value.some(sv => sv.id === video.id)
+    ).length;
+
+    const isFullySelected = selectedCount === allVideos.length;
+
+    console.log(`[VideoStore] 已选中 ${selectedCount}/${allVideos.length} 个视频，全选状态: ${isFullySelected}`);
+
+    if (isFullySelected) {
+      // 全选 → 取消：批量移除，避免触发降维逻辑
+      console.log(`[VideoStore] 开始取消目录选择: ${directoryNode.name}`);
+
+      // 收集需要移除的视频 ID
+      const idsToRemove = new Set(allVideos.map(v => v.id));
+
+      // 批量过滤，避免逐个调用 toggleVideoSelection 触发降维
+      const remainingVideos = selectedVideos.value.filter(v => !idsToRemove.has(v.id));
+      const removedCount = selectedVideos.value.length - remainingVideos.length;
+
+      console.log(`[VideoStore] 即将移除 ${removedCount} 个视频，保留 ${remainingVideos.length} 个视频`);
+
+      // 根据剩余数量决定清理策略
+      if (remainingVideos.length === 0) {
+        // 全部清空：清理所有模式的数据
+        console.log(`[VideoStore] 清空所有选择，触发完整清理`);
+        selectedVideos.value = [];
+        currentTime.value = 0;
+        duration.value = 0;
+
+        // 清理批量模式数据
+        await cleanupBatchModeData();
+      } else if (remainingVideos.length === 1) {
+        // 降维到单选：清理批量数据，保留单选状态
+        console.log(`[VideoStore] 降维到单选: ${remainingVideos[0].name}`);
+        await cleanupBatchModeData();
+        selectedVideos.value = remainingVideos;
+
+        // 初始化单选状态
+        currentTime.value = 0;
+        if (remainingVideos[0].metadata?.duration) {
+          setDuration(parseTimecode(remainingVideos[0].metadata.duration));
+        }
+      } else {
+        // 仍然是批量模式：只移除目标视频，清理对应的批量数据
+        console.log(`[VideoStore] 批量模式，移除 ${removedCount} 个视频`);
+
+        // 清理被移除视频的批量切片数据
+        const removedIds = new Set(allVideos.map(v => v.id));
+        batchSliceGroups.value = batchSliceGroups.value.filter(
+          group => !removedIds.has(group.videoId)
+        );
+
+        selectedVideos.value = remainingVideos;
+      }
+
+      console.log(`[VideoStore] 取消目录选择完成，最终剩余 ${selectedVideos.value.length} 个视频`);
+    } else {
+      // 未选/半选 → 全选：逐个添加（顺序执行，避免竞态）
+      console.log(`[VideoStore] 全选目录: ${directoryNode.name}, 共 ${allVideos.length} 个视频`);
+      for (const video of allVideos) {
+        if (!selectedVideos.value.some(sv => sv.id === video.id)) {
+          await toggleVideoSelection(video);
+        }
+      }
+    }
+  }
+
   return {
     selectedVideos: readonly(selectedVideos),
     focusedVideo: readonly(focusedVideo),
@@ -309,5 +407,6 @@ export const useVideoStore = defineStore('video', () => {
     setCurrentTime,
     setDuration,
     reset,
+    toggleDirectorySelection,
   };
 });
