@@ -258,6 +258,61 @@ function handleResizeEnd() {
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
 }
+
+// 监听选中视频变化，自动捕获根目录
+import { watch } from 'vue';
+
+watch(
+  () => videoStore.selectedVideos,
+  () => {
+    captureRootDirectories();
+  },
+  { deep: true }
+);
+
+/**
+ * 捕获用户勾选的最高层级目录
+ */
+function captureRootDirectories() {
+  const rootDirs: string[] = [];
+  const selectedVideoIds = new Set(videoStore.selectedVideos.map(v => v.id));
+
+  // 遍历文件树，找到所有被勾选的目录节点（最高层级）
+  function traverseNode(node: FileNode, parentPath: string | null) {
+    if (node.type === 'directory') {
+      // 检查该目录下是否有选中的视频
+      const hasSelectedVideos = checkHasSelectedVideos(node);
+
+      if (hasSelectedVideos && !parentPath) {
+        // 如果该目录有选中视频，且没有父目录已被记录，则记录该目录
+        rootDirs.push(node.path);
+      }
+
+      // 递归子节点
+      if (node.children) {
+        for (const child of node.children) {
+          traverseNode(child, hasSelectedVideos ? node.path : parentPath);
+        }
+      }
+    }
+  }
+
+  function checkHasSelectedVideos(node: FileNode): boolean {
+    if (node.type === 'file') {
+      return selectedVideoIds.has(node.id);
+    } else if (node.children) {
+      return node.children.some(child => checkHasSelectedVideos(child));
+    }
+    return false;
+  }
+
+  // 从根节点开始遍历
+  for (const root of roots.value) {
+    traverseNode(root, null);
+  }
+
+  videoStore.setSelectedRootDirs(rootDirs);
+}
 </script>
 
 <style scoped>

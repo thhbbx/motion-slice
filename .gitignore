@@ -127,3 +127,6 @@ exports/verification.log
 
 # Git worktrees
 .worktrees/
+
+# Superpowers skill sessions
+.superpowers/

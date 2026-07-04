@@ -112,6 +112,11 @@
     transform: translateY(1px);
 }
 
+.video-tool-page .vt-button-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .video-tool-page .vt-button-ghost {
     display: inline-flex;
     align-items: center;
@@ -229,4 +234,33 @@
 .video-tool-page input[type="number"] {
     -moz-appearance: textfield; /* Firefox 兼容 */
     appearance: textfield;
+}
+
+/* --- 滚动条样式 (macOS 风格) --- */
+/* Webkit 浏览器 (Chrome, Edge, Safari) */
+.video-tool-page ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.video-tool-page ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.video-tool-page ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    opacity: 0.6;
+    transition: opacity 180ms ease, background 180ms ease;
+}
+
+.video-tool-page ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+    opacity: 1;
+}
+
+/* Firefox */
+.video-tool-page * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }

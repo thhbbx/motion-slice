@@ -38,6 +38,8 @@ export interface ExportTaskPayload {
     endTime: number;
     label: string;
   }>;
+  /** 根目录路径（用于保留层级结构，可选） */
+  rootDir?: string;
   /** 其他工具可扩展字段 */
   [key: string]: unknown;
 }

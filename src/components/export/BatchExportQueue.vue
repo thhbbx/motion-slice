@@ -34,10 +34,19 @@
 
     <div class="queue-list">
       <div v-for="task in exportTasks" :key="task.id" class="task-item" :class="task.status">
-        <span class="task-name" :title="`${task.videoName} - ${task.sliceLabel}`">
-          {{ task.videoName }} - {{ task.sliceLabel }}
-        </span>
-        <span class="task-status">{{ statusText(task.status) }}</span>
+        <div class="task-info">
+          <div class="task-name-line">
+            <span class="task-name" :title="getFullTaskPath(task)">
+              {{ task.videoName }} - {{ task.sliceLabel }}
+            </span>
+            <span class="task-status">{{ statusText(task.status) }}</span>
+          </div>
+          <div v-if="getParentPath(task.videoPath)" class="task-path-line">
+            <span class="task-parent-path">
+              📁 {{ getParentPath(task.videoPath) }}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -55,7 +64,7 @@
 
       <button
         v-if="!isAllCompleted"
-        class="btn-execute"
+        class="vt-button-primary"
         :disabled="!canExecute || isExporting"
         @click="handleExecute"
       >
@@ -87,6 +96,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useExportStore } from '../../store/useExportStore';
+import { formatPathFromRoot } from '../../utils/pathFormat';
 
 const videoStore = useVideoStore();
 const { batchSliceGroups, selectedVideos } = storeToRefs(videoStore);
@@ -168,6 +178,31 @@ function statusText(status: string) {
   return map[status] || status;
 }
 
+/**
+ * 获取从根目录开始的相对路径（用于显示）
+ */
+function getParentPath(fullPath: string): string {
+  const rootDir = videoStore.inferRootDir(fullPath);
+  return formatPathFromRoot(fullPath, rootDir, 35);
+}
+
+/**
+ * 截断文件名（如果过长）
+ */
+function truncateFileName(fileName: string, maxLength: number = 25): string {
+  if (fileName.length <= maxLength) {
+    return fileName;
+  }
+  return fileName.substring(0, maxLength - 3) + '...';
+}
+
+/**
+ * 获取完整任务路径（用于 title 属性）
+ */
+function getFullTaskPath(task: any): string {
+  return `${task.videoPath} - ${task.sliceLabel}`;
+}
+
 onMounted(async () => {
   // 获取默认下载目录
   try {
@@ -236,6 +271,8 @@ async function handleExecute() {
       const activeSlices = group.slices.filter(s => s.isActive);
       if (activeSlices.length === 0) return [];
 
+      const rootDir = videoStore.inferRootDir(group.videoPath);
+
       return {
         id: `export-${group.videoId}`,
         toolId: 'slicer',
@@ -249,7 +286,8 @@ async function handleExecute() {
             startTime: s.startTime,
             endTime: s.endTime,
             label: s.label
-          }))
+          })),
+          rootDir: rootDir
         },
         createdAt: Date.now()
       };
@@ -293,6 +331,7 @@ async function handleExecute() {
   background: var(--vt-bg-soft);
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-md);
+  flex-shrink: 0;
 }
 
 .queue-summary h3 {
@@ -312,6 +351,7 @@ async function handleExecute() {
   background: var(--vt-bg-elevated);
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-md);
+  flex-shrink: 0;
 }
 
 .queue-progress h4 {
@@ -356,17 +396,15 @@ async function handleExecute() {
 }
 
 .queue-list {
-  max-height: 400px;
+  height: 400px;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-md);
   background: var(--vt-bg-elevated);
 }
 
 .task-item {
-  display: flex;
-  align-items: center;
-  gap: var(--vt-space-3);
   padding: var(--vt-space-3) var(--vt-space-4);
   border-bottom: 1px solid var(--vt-border);
   transition: background 180ms ease;
@@ -378,6 +416,26 @@ async function handleExecute() {
 
 .task-item:hover {
   background: var(--vt-bg-soft);
+}
+
+.task-info {
+  width: 100%;
+}
+
+.task-name-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vt-space-2);
+}
+
+.task-path-line {
+  margin-top: var(--vt-space-1);
+  font-size: 11px;
+  padding-right: var(--vt-space-2);
+  width: 100%;
+  overflow: hidden;
+  display: block;
 }
 
 .task-item.success {
@@ -396,12 +454,25 @@ async function handleExecute() {
 
 .task-name {
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--vt-font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+.task-parent-path {
+  font-family: var(--vt-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--vt-text-muted);
+  opacity: 0.8;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .task-status {
@@ -419,6 +490,7 @@ async function handleExecute() {
   border: 1px solid var(--vt-border);
   border-radius: var(--vt-radius-md);
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
   gap: var(--vt-space-2);
 }
@@ -471,7 +543,7 @@ async function handleExecute() {
   display: flex;
   flex-direction: column;
   gap: var(--vt-space-3);
-  align-items: stretch;
+  flex-shrink: 0;
 }
 
 .error-panel {
@@ -543,32 +615,9 @@ async function handleExecute() {
   word-break: break-word;
 }
 
-.btn-execute,
+.vt-button-primary,
 .btn-completed {
   align-self: flex-end;
-}
-
-.btn-execute {
-  padding: var(--vt-space-3) var(--vt-space-6);
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--vt-primary);
-  border: none;
-  border-radius: var(--vt-radius-md);
-  color: white;
-  cursor: pointer;
-  transition: all 180ms ease;
-}
-
-.btn-execute:hover:not(:disabled) {
-  background: var(--vt-primary-bright);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-}
-
-.btn-execute:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .btn-completed {

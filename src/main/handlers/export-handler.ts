@@ -152,6 +152,33 @@ function parseFFmpegError(stderr: string): string {
 }
 
 /**
+ * 计算相对路径（用于保留目录层级）
+ */
+function calculateRelativePath(sourceFilePath: string, rootDir?: string): string {
+  if (!rootDir) {
+    // 场景 1：勾选单个文件，直接返回文件名
+    return path.basename(sourceFilePath, path.extname(sourceFilePath));
+  }
+
+  // 场景 2：勾选目录，提取相对路径
+  const normalizedSource = path.normalize(sourceFilePath);
+  const normalizedRoot = path.normalize(rootDir);
+
+  if (normalizedSource.startsWith(normalizedRoot)) {
+    const relativePath = path.relative(normalizedRoot, path.dirname(normalizedSource));
+    const fileName = path.basename(sourceFilePath, path.extname(sourceFilePath));
+    return path.join(path.basename(normalizedRoot), relativePath, fileName);
+  }
+
+  // 兜底：无法匹配时返回文件名
+  console.warn('[ExportHandler] 根目录不匹配，退回到平铺模式', {
+    source: normalizedSource,
+    root: normalizedRoot
+  });
+  return path.basename(sourceFilePath, path.extname(sourceFilePath));
+}
+
+/**
  * 导出单个视频切片
  * @param sourceFilePath 源视频路径
  * @param outputPath 输出文件路径
@@ -268,14 +295,23 @@ async function exportSlicerTask(
   quality: number,
   mainWindow: BrowserWindow
 ): Promise<void> {
-  const { sourceFilePath, segments } = task.payload;
+  const { sourceFilePath, segments, rootDir } = task.payload;
 
   if (!segments || segments.length === 0) {
     throw new Error('切片数组为空');
   }
 
-  // 确保输出目录存在
-  ensureOutputDir(outputDir);
+  // 计算相对路径
+  const outputSubPath = calculateRelativePath(sourceFilePath, rootDir);
+  const outputDirPath = path.join(outputDir, path.dirname(outputSubPath));
+
+  // 创建子目录结构（递归创建）
+  if (!fs.existsSync(outputDirPath)) {
+    fs.mkdirSync(outputDirPath, { recursive: true });
+    console.log('[ExportHandler] 创建输出目录:', outputDirPath);
+  }
+
+  const baseFileName = path.basename(outputSubPath);
 
   // 预估所需磁盘空间
   try {
@@ -302,17 +338,14 @@ async function exportSlicerTask(
     console.warn('[ExportHandler] 磁盘空间预检查失败（将继续导出）:', error);
   }
 
-  // 获取源文件名（不含扩展名）
-  const sourceBasename = path.basename(sourceFilePath, path.extname(sourceFilePath));
-
   // 逐个导出切片
   const failures: string[] = [];
 
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
 
-    const outputFilename = sanitizeFilename(`${sourceBasename}_${segment.label}.${format}`);
-    const outputPath = path.join(outputDir, outputFilename);
+    const outputFilename = sanitizeFilename(`${baseFileName}_${segment.label}.${format}`);
+    const outputPath = path.join(outputDirPath, outputFilename);
 
     console.log(
       `[ExportHandler] 开始导出切片 ${i + 1}/${segments.length}: ${segment.label}`,

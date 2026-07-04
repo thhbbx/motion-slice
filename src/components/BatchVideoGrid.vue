@@ -15,7 +15,16 @@
           <span class="expand-icon" @click.stop="toggleExpand(video.id)">
             {{ isExpanded(video.id) ? '▼' : '▶' }}
           </span>
-          <span class="video-name">{{ video.name }}</span>
+          <span class="video-name">
+            {{ video.name }}
+            <span
+              v-if="getParentPath(video.path)"
+              class="video-parent-path"
+              :title="video.path"
+            >
+              📁 {{ getParentPath(video.path) }}
+            </span>
+          </span>
           <span class="video-duration vt-timecode">{{ video.metadata?.duration || '--' }}</span>
           <span class="video-size">{{ video.metadata?.size || '--' }}</span>
           <span v-if="getAppliedMode(video.id)" class="mode-badge" :class="getModeBadgeClass(video.id)">
@@ -74,6 +83,7 @@ import { useVideoStore } from '../store/useVideoStore';
 import type { FileNode } from '../types/file-tree';
 import type { BatchSliceItem } from '../types/batch';
 import { formatTimecode } from '../utils/timeFormat';
+import { formatPathFromRoot } from '../utils/pathFormat';
 import SlicePreviewModal from './video/SlicePreviewModal.vue';
 
 defineProps<{
@@ -110,6 +120,11 @@ function isExpanded(videoId: string) {
 
 function isFocused(videoId: string) {
   return focusedVideo.value?.id === videoId;
+}
+
+function getParentPath(fullPath: string): string {
+  const rootDir = videoStore.inferRootDir(fullPath);
+  return formatPathFromRoot(fullPath, rootDir, 80);
 }
 
 function getSlicesForVideo(videoId: string) {
@@ -246,6 +261,22 @@ function handleClosePreview() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2); /* 8px 间距 */
+}
+
+.video-parent-path {
+  font-family: var(--vt-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--vt-text-muted); /* #777782 */
+  opacity: 0.8;
+  max-width: 500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
 }
 
 .video-duration, .video-size {

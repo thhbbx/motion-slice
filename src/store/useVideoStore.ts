@@ -8,6 +8,7 @@ export const useVideoStore = defineStore('video', () => {
   const selectedVideos = ref<FileNode[]>([]);
   const focusedVideo = ref<FileNode | null>(null);
   const batchSliceGroups = ref<BatchSliceGroup[]>([]);
+  const selectedRootDirs = ref<string[]>([]);
 
   const activeVideo = computed(() =>
     selectedVideos.value.length === 1 ? selectedVideos.value[0] : null
@@ -307,6 +308,36 @@ export const useVideoStore = defineStore('video', () => {
   }
 
   /**
+   * 推断视频的根目录（从 selectedRootDirs 中匹配）
+   */
+  function inferRootDir(videoPath: string): string | undefined {
+    if (selectedRootDirs.value.length === 0) {
+      return undefined;
+    }
+
+    // 归一化路径（统一使用正斜杠）
+    const normalizedVideoPath = videoPath.replace(/\\/g, '/');
+
+    // 找到最长的匹配前缀
+    for (const rootDir of selectedRootDirs.value) {
+      const normalizedRootDir = rootDir.replace(/\\/g, '/');
+      if (normalizedVideoPath.startsWith(normalizedRootDir)) {
+        return rootDir; // 返回原始路径（保留反斜杠）
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 设置选中的根目录列表
+   */
+  function setSelectedRootDirs(dirs: string[]) {
+    selectedRootDirs.value = dirs;
+    console.log('[VideoStore] 根目录已更新:', dirs);
+  }
+
+  /**
    * 切换目录的选中状态（级联选择所有子视频）
    */
   async function toggleDirectorySelection(directoryNode: FileNode) {
@@ -391,6 +422,7 @@ export const useVideoStore = defineStore('video', () => {
     selectedVideos: readonly(selectedVideos),
     focusedVideo: readonly(focusedVideo),
     batchSliceGroups: readonly(batchSliceGroups),
+    selectedRootDirs: readonly(selectedRootDirs),
     activeVideo,
     isBatchMode,
     exportTaskQueue,
@@ -408,5 +440,7 @@ export const useVideoStore = defineStore('video', () => {
     setDuration,
     reset,
     toggleDirectorySelection,
+    inferRootDir,
+    setSelectedRootDirs,
   };
 });
