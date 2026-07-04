@@ -460,7 +460,7 @@ export class WorkerPoolManager {
   async submitBatch(
     filePaths: string[],
     onProgress?: (current: number, total: number) => void
-  ): Promise<VideoMetadata[]> {
+  ): Promise<(VideoMetadata | null)[]> {
     console.log(`[WorkerPoolManager] 批量提交 ${filePaths.length} 个任务`);
 
     const promises = filePaths.map((filePath, index) => {
@@ -472,12 +472,12 @@ export class WorkerPoolManager {
         .catch((error) => {
           console.error(`[WorkerPoolManager] 批量任务 ${index} 失败:`, error);
           onProgress?.(index + 1, filePaths.length);
-          return null;
+          return null; // 保留 null，不过滤
         });
     });
 
     const results = await Promise.all(promises);
-    return results.filter((r): r is VideoMetadata => r !== null);
+    return results; // 移除 filter，保持数组长度与输入一致
   }
 }
 
