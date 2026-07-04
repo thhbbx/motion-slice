@@ -2,7 +2,7 @@ import { ipcMain } from 'electron';
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import { getFfprobePath } from '../utils/ffprobe-helper';
-import type { SliceAnalyzeParams, SliceAnalyzeResult, VideoSegment } from '../../types/slice';
+import type { SliceAnalyzeParams, SliceAnalyzeResult, VideoSegment, SliceMode, SliceModeConfig } from '../../types/slice';
 import type { BatchSliceGroup } from '../../types/batch';
 import { TaskQueue } from '../../utils/taskQueue';
 
@@ -129,6 +129,129 @@ function sliceBySize(
 }
 
 /**
+ * 判断哪个模式先到（第一个切点）
+ * 支持缓冲与大小限制冲突时的自动调整
+ */
+function determineFirstReachedMode(
+  videoDuration: number,
+  fileSizeMB: number,
+  modes: SliceModeConfig[],
+  useOverlapHandles: boolean,
+  overlapDuration: number
+): { mode: SliceMode; targetDuration: number; adjusted: boolean } {
+  let minCutPoint = Infinity;
+  let selectedMode: SliceMode = 'duration';
+  let targetDuration = 0;
+  let adjusted = false;
+
+  const mbPerSecond = fileSizeMB / videoDuration;
+
+  // 查找是否同时启用按大小模式
+  const sizeMode = modes.find(m => m.enabled && m.mode === 'size');
+  const sizeLimitMB = sizeMode?.targetValue;
+
+  for (const config of modes) {
+    if (!config.enabled) continue;
+
+    if (config.mode === 'duration') {
+      let cutPoint = config.targetValue;
+
+      // 如果启用缓冲且有大小限制，检查是否需要调整
+      if (useOverlapHandles && overlapDuration > 0 && sizeLimitMB) {
+        const durationWithBuffer = cutPoint + 2 * overlapDuration;
+        const sizeWithBuffer = durationWithBuffer * mbPerSecond;
+
+        if (sizeWithBuffer > sizeLimitMB) {
+          // 需要调整：确保加缓冲后不超过大小限制
+          const maxAllowedDuration = sizeLimitMB / mbPerSecond;
+          const adjustedCoreDuration = maxAllowedDuration - 2 * overlapDuration;
+
+          if (adjustedCoreDuration > 0 && adjustedCoreDuration < cutPoint) {
+            cutPoint = adjustedCoreDuration;
+            adjusted = true;
+            console.log(`[SliceHandler] 自动调整时长: ${config.targetValue}s → ${cutPoint.toFixed(1)}s (加缓冲后不超过 ${sizeLimitMB} MB)`);
+          }
+        }
+      }
+
+      if (cutPoint < minCutPoint) {
+        minCutPoint = cutPoint;
+        selectedMode = 'duration';
+        targetDuration = cutPoint;
+      }
+    } else if (config.mode === 'size') {
+      const cutPoint = config.targetValue / mbPerSecond;
+      if (cutPoint < minCutPoint) {
+        minCutPoint = cutPoint;
+        selectedMode = 'size';
+        targetDuration = cutPoint;
+      }
+    }
+  }
+
+  return { mode: selectedMode, targetDuration, adjusted };
+}
+
+/**
+ * 检查是否需要切分
+ */
+function needsSlicing(
+  videoDuration: number,
+  fileSizeMB: number,
+  modes: SliceModeConfig[]
+): boolean {
+  for (const config of modes) {
+    if (!config.enabled) continue;
+
+    if (config.mode === 'duration' && videoDuration > config.targetValue) {
+      return true;
+    }
+    if (config.mode === 'size' && fileSizeMB > config.targetValue) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 预估切片大小
+ */
+function estimateSegmentSizes(
+  segments: VideoSegment[],
+  videoDuration: number,
+  fileSizeMB: number
+): number[] {
+  return segments.map(seg => {
+    const segmentDuration = seg.endTime - seg.startTime;
+    const ratio = segmentDuration / videoDuration;
+    return Math.round(fileSizeMB * ratio * 100) / 100;
+  });
+}
+
+/**
+ * 参数格式标准化（向后兼容）
+ */
+function normalizeParams(params: any): SliceAnalyzeParams {
+  if (params.modes && Array.isArray(params.modes)) {
+    return params as SliceAnalyzeParams;
+  }
+
+  return {
+    filePath: params.filePath,
+    modes: [
+      {
+        mode: params.mode,
+        targetValue: params.targetValue,
+        enabled: true
+      }
+    ],
+    useOverlapHandles: params.useOverlapHandles,
+    overlapDuration: params.overlapDuration
+  };
+}
+
+
+/**
  * 批量视频切片分析处理器
  */
 async function handleBatchAnalyze(
@@ -172,10 +295,13 @@ async function handleBatchAnalyze(
             endTime: slice.endTime,
             isActive: true,
             metadata: {
-              duration: slice.endTime - slice.startTime
+              duration: slice.endTime - slice.startTime,
+              estimatedSize: slice.estimatedSize
             }
           })),
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          appliedMode: result.appliedMode,
+          needsSlicing: result.needsSlicing
         };
       }
     });
@@ -192,12 +318,10 @@ async function handleBatchAnalyze(
  * 单视频切片分析（内部函数）
  */
 async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnalyzeResult> {
-  const { filePath, mode, targetValue, useOverlapHandles, overlapDuration } = params;
+  const normalizedParams = normalizeParams(params);
+  const { filePath, modes, useOverlapHandles, overlapDuration } = normalizedParams;
 
   // 参数验证
-  if (targetValue <= 0) {
-    throw new Error(`目标值必须大于 0，当前值: ${targetValue}`);
-  }
   if (overlapDuration < 0 || overlapDuration > 30) {
     throw new Error(`交叠缓冲时长必须在 0-30 秒之间，当前值: ${overlapDuration}`);
   }
@@ -209,30 +333,68 @@ async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnal
 
   // 获取视频时长
   const videoDuration = await getVideoDuration(filePath);
+  const stats = fs.statSync(filePath);
+  const fileSizeMB = stats.size / (1024 * 1024);
 
-  // 合理性检查：避免生成过多片段
-  const estimatedCount = Math.ceil(videoDuration / targetValue);
-  if (estimatedCount > 1000) {
-    throw new Error(`目标值过小，将生成 ${estimatedCount} 个片段（最多支持 1000 个）`);
+  // 检查是否需要切分
+  const needsSlice = needsSlicing(videoDuration, fileSizeMB, modes);
+
+  if (!needsSlice) {
+    // 视为单切片
+    const segment: VideoSegment = {
+      id: 'segment-1',
+      startTime: 0,
+      endTime: videoDuration,
+      label: '切片 1',
+      headBuffer: 0,
+      tailBuffer: 0,
+      estimatedSize: Math.round(fileSizeMB * 100) / 100
+    };
+
+    return {
+      segments: [segment],
+      totalCount: 1,
+      videoDuration,
+      appliedMode: modes.find(m => m.enabled)?.mode || 'duration',
+      needsSlicing: false,
+      durationAdjusted: false
+    };
   }
 
-  let segments: VideoSegment[];
+  // 确定使用哪个模式（传递缓冲参数用于自动调整）
+  const { mode: appliedMode, targetDuration, adjusted } = determineFirstReachedMode(
+    videoDuration,
+    fileSizeMB,
+    modes,
+    useOverlapHandles,
+    overlapDuration
+  );
 
-  if (mode === 'duration') {
-    segments = sliceByDuration(videoDuration, targetValue, useOverlapHandles, overlapDuration);
-  } else {
-    const stats = fs.statSync(filePath);
-    if (!stats.isFile()) {
-      throw new Error(`路径不是有效的文件: ${filePath}`);
-    }
-    const fileSizeMB = stats.size / (1024 * 1024);
-    segments = sliceBySize(videoDuration, fileSizeMB, targetValue, useOverlapHandles, overlapDuration);
-  }
+  // 判断是否应用缓冲（按大小模式不应用）
+  const shouldApplyBuffer = useOverlapHandles && appliedMode !== 'size';
+
+  // 执行切分
+  const segments = sliceByDuration(
+    videoDuration,
+    targetDuration,
+    shouldApplyBuffer,
+    shouldApplyBuffer ? overlapDuration : 0
+  );
+
+  // 预估大小
+  const estimatedSizes = estimateSegmentSizes(segments, videoDuration, fileSizeMB);
+  segments.forEach((seg, i) => {
+    seg.estimatedSize = estimatedSizes[i];
+  });
 
   return {
     segments,
     totalCount: segments.length,
     videoDuration,
+    appliedMode,
+    estimatedSizes,
+    needsSlicing: true,
+    durationAdjusted: adjusted
   };
 }
 

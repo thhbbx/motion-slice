@@ -1,3 +1,5 @@
+import type { SliceMode } from './slice';
+
 /**
  * 批量切片组（树形结构的根节点）
  */
@@ -7,6 +9,8 @@ export interface BatchSliceGroup {
   videoName: string;         // 视频文件名
   slices: BatchSliceItem[];  // 该视频的所有切片
   createdAt: number;         // 创建时间戳
+  appliedMode: SliceMode;    // 该视频实际采用的模式
+  needsSlicing: boolean;     // 是否真正需要切分
 }
 
 /**

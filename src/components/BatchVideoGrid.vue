@@ -18,6 +18,9 @@
           <span class="video-name">{{ video.name }}</span>
           <span class="video-duration vt-timecode">{{ video.metadata?.duration || '--' }}</span>
           <span class="video-size">{{ video.metadata?.size || '--' }}</span>
+          <span v-if="getAppliedMode(video.id)" class="mode-badge" :class="getModeBadgeClass(video.id)">
+            {{ getModeText(video.id) }}
+          </span>
           <span class="status-badge" :class="getStatusClass(video.id)">{{ getStatusText(video.id) }}</span>
         </div>
 
@@ -29,7 +32,12 @@
           <div v-else class="slices-list">
             <div v-for="slice in getSlicesForVideo(video.id)" :key="slice.id" class="slice-item" :class="{ disabled: !slice.isActive }">
               <span class="slice-label">{{ slice.label }}</span>
-              <span class="slice-time vt-timecode">{{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }}</span>
+              <span class="slice-time vt-timecode">
+                {{ formatTime(slice.startTime) }} - {{ formatTime(slice.endTime) }}
+                <span v-if="slice.metadata?.estimatedSize" class="slice-size">
+                  • 约 {{ slice.metadata.estimatedSize.toFixed(1) }} MB
+                </span>
+              </span>
               <button class="btn-preview" title="预览切片" @click.stop="handlePreview(video, slice)">▶</button>
               <button @click.stop="handleToggleActive(video.id, slice.id)" class="btn-toggle" :class="{ active: slice.isActive }">
                 <svg v-if="slice.isActive" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -119,6 +127,28 @@ function getStatusText(videoId: string) {
   const slices = getSlicesForVideo(videoId);
   if (slices.length === 0) return '等待分析';
   return `${slices.length} 个切片`;
+}
+
+function getAppliedMode(videoId: string) {
+  const group = batchSliceGroups.value.find(g => g.videoId === videoId);
+  return group?.appliedMode;
+}
+
+function getModeText(videoId: string) {
+  const mode = getAppliedMode(videoId);
+  if (!mode) return '';
+
+  const group = batchSliceGroups.value.find(g => g.videoId === videoId);
+  if (group && !group.needsSlicing) {
+    return '无需切分';
+  }
+
+  return mode === 'duration' ? '按时长' : '按大小';
+}
+
+function getModeBadgeClass(videoId: string) {
+  const mode = getAppliedMode(videoId);
+  return mode === 'duration' ? 'mode-duration' : 'mode-size';
 }
 
 function formatTime(seconds: number) {
@@ -234,6 +264,27 @@ function handleClosePreview() {
   letter-spacing: 0.05em;
 }
 
+.mode-badge {
+  display: inline-block;
+  padding: 2px var(--vt-space-2);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--vt-radius-sm);
+  border: 1px solid;
+}
+
+.mode-duration {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--vt-primary);
+  border-color: var(--vt-primary);
+}
+
+.mode-size {
+  background: rgba(234, 179, 8, 0.1);
+  color: #eab308;
+  border-color: #eab308;
+}
+
 .status-ready {
   background: var(--vt-primary-soft);
   color: var(--vt-primary);
@@ -295,6 +346,13 @@ function handleClosePreview() {
   color: var(--vt-text-muted);
   font-family: var(--vt-font-mono);
   flex: 1;
+}
+
+.slice-size {
+  color: var(--vt-text-muted);
+  font-size: 11px;
+  margin-left: var(--vt-space-1);
+  opacity: 0.8;
 }
 
 .btn-preview {

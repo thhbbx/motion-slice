@@ -125,17 +125,13 @@
             <span>当前规则将应用于选中的 {{ selectedVideos.length }} 个视频</span>
           </div>
 
-          <div class="tool-selector" :class="{ 'disabled-section': isExporting }">
+          <div class="tool-selector-wrapper" :class="{ 'disabled-section': isExporting }">
             <label class="tool-label">选择工具</label>
-            <select v-model="currentTool" class="tool-select" :disabled="isExporting">
-              <option
-                v-for="tool in toolOptions"
-                :key="tool.value"
-                :value="tool.value"
-              >
-                {{ tool.label }}
-              </option>
-            </select>
+            <ToolSelector
+              v-model="currentTool"
+              :options="toolOptions"
+              :disabled="isExporting"
+            />
           </div>
 
           <div class="tool-container" :class="{ 'disabled-section': isExporting }">
@@ -179,6 +175,7 @@ import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../store/useVideoStore';
 import { useExportStore } from '../store/useExportStore';
 import ToolSlicer from './tools/ToolSlicer.vue';
+import ToolSelector from './common/ToolSelector.vue';
 import ExportTab from './ExportTab.vue';
 
 const videoStore = useVideoStore();
@@ -612,27 +609,17 @@ function formatCreatedTime(metadata: any): string {
 }
 
 /* 工具选择器 */
-.tool-selector {
+.tool-selector-wrapper {
   padding: 12px 16px;
   border-bottom: 1px solid var(--vt-border);
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .tool-label {
   font-size: 13px;
   color: var(--vt-text-secondary);
-}
-
-.tool-select {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--vt-border);
-  border-radius: 4px;
-  background: var(--vt-bg-secondary);
-  color: var(--vt-text-primary);
-  font-size: 13px;
 }
 
 .tool-container {

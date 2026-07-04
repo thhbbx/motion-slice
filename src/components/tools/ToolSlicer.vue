@@ -9,68 +9,73 @@
         <label class="form-label">
           <span class="label-text">切分模式</span>
         </label>
-        <div class="radio-group">
-          <label class="radio-option">
+        <div class="checkbox-group">
+          <label class="checkbox-option">
             <input
-              type="radio"
-              name="mode"
-              value="duration"
-              v-model="mode"
-              class="radio-input"
+              type="checkbox"
+              :checked="enabledModes.duration"
+              @change="handleModeToggle('duration', $event)"
+              class="vt-checkbox"
               :disabled="disabled"
             />
-            <span class="radio-label">按时长</span>
+            <span class="checkbox-label">按时长</span>
           </label>
-          <label class="radio-option">
+          <label class="checkbox-option">
             <input
-              type="radio"
-              name="mode"
-              value="size"
-              v-model="mode"
-              class="radio-input"
+              type="checkbox"
+              :checked="enabledModes.size"
+              @change="handleModeToggle('size', $event)"
+              class="vt-checkbox"
               :disabled="disabled"
             />
-            <span class="radio-label">按大小</span>
+            <span class="checkbox-label">按大小</span>
           </label>
         </div>
       </div>
 
-      <!-- 目标时长输入：输入框 + 单位切换器 -->
-      <div class="form-row">
+      <!-- 按时长配置 -->
+      <div v-if="enabledModes.duration" class="form-row mode-config">
         <label class="form-label">
-          <span class="label-text">{{ inputLabel }}</span>
+          <span class="label-text">目标时长</span>
         </label>
         <div class="input-with-unit">
           <input
             type="number"
-            v-model.number="displayValue"
-            :placeholder="inputPlaceholder"
-            :min="targetUnit === 'minutes' ? 1 : 1"
-            :step="targetUnit === 'minutes' ? 1 : 10"
+            v-model.number="durationDisplay"
+            min="1"
+            step="1"
             class="vt-input"
             :disabled="disabled"
           />
-          <div v-if="mode === 'duration'" class="unit-toggle">
-            <button
-              type="button"
-              class="unit-option"
-              :class="{ active: targetUnit === 'minutes' }"
-              @click="targetUnit = 'minutes'"
-              :disabled="disabled"
-            >
-              分钟
-            </button>
-            <button
-              type="button"
-              class="unit-option"
-              :class="{ active: targetUnit === 'seconds' }"
-              @click="targetUnit = 'seconds'"
-              :disabled="disabled"
-            >
-              秒
-            </button>
+          <div class="unit-toggle">
+            <button type="button" class="unit-option" :class="{ active: durationUnit === 'minutes' }" @click="durationUnit = 'minutes'" :disabled="disabled">分钟</button>
+            <button type="button" class="unit-option" :class="{ active: durationUnit === 'seconds' }" @click="durationUnit = 'seconds'" :disabled="disabled">秒</button>
           </div>
         </div>
+      </div>
+
+      <!-- 按大小配置 -->
+      <div v-if="enabledModes.size" class="form-row mode-config">
+        <label class="form-label">
+          <span class="label-text">目标大小</span>
+        </label>
+        <div class="input-with-unit">
+          <input
+            type="number"
+            v-model.number="sizeValue"
+            min="1"
+            step="10"
+            class="vt-input"
+            :disabled="disabled"
+          />
+          <div class="unit-label">MB</div>
+        </div>
+      </div>
+
+      <!-- 缓冲警告横幅 -->
+      <div v-if="showBufferWarning" class="buffer-warning">
+        <span class="warning-icon">⚠️</span>
+        <span class="warning-text">已勾选按大小模式，若最终按大小切分将忽略交叠缓冲</span>
       </div>
 
       <!-- 交叠缓冲开关 -->
@@ -81,10 +86,10 @@
             type="checkbox"
             v-model="useOverlapHandles"
             class="vt-switch"
-            :disabled="disabled"
+            :disabled="bufferDisabled || disabled"
           />
         </label>
-        <div class="form-hint vt-muted">在切口两端延伸冗余时间，便于后期转场</div>
+        <div class="form-hint vt-muted">{{ bufferHintText }}</div>
       </div>
 
       <!-- 缓冲时长滑块（仅在交叠缓冲开启时显示） -->
@@ -124,7 +129,17 @@
     </div>
 
     <!-- 动态组件：策略模式 -->
-    <component :is="currentModeComponent" :mode="mode" :target-value="targetValue" />
+    <component
+      :is="currentModeComponent"
+      :mode="mode"
+      :target-value="targetValue"
+      :enabled-modes="enabledModes"
+      :duration-display="durationDisplay"
+      :duration-unit="durationUnit"
+      :size-value="sizeValue"
+      :use-overlap-handles="useOverlapHandles"
+      :overlap-duration="overlapDuration"
+    />
   </div>
 </template>
 
@@ -154,31 +169,81 @@ const exportStore = useExportStore();
 const { activeVideo, selectedVideos, isBatchMode } = storeToRefs(videoStore);
 const { isAnalyzing } = storeToRefs(sliceStore);
 
-const mode = ref<'duration' | 'size'>('duration');
-const targetUnit = ref<'minutes' | 'seconds'>('minutes'); // 新增：单位状态，默认分钟
-const displayValue = ref<number>(20); // 新增：UI 展示值，默认 20 分钟
-const targetValue = ref<number>(1200); // 修改默认值为 1200 秒（20 分钟）
-const useOverlapHandles = ref<boolean>(false);
-const overlapDuration = ref<number>(10.0); // 修改默认值：1.0 → 10.0
-
-// 新增：监听单位切换，自动转换数值
-watch(targetUnit, (newUnit, oldUnit) => {
-  if (oldUnit && newUnit !== oldUnit) {
-    if (newUnit === 'seconds' && oldUnit === 'minutes') {
-      // 分钟 → 秒：乘以 60
-      displayValue.value = Math.round(displayValue.value * 60);
-    } else if (newUnit === 'minutes' && oldUnit === 'seconds') {
-      // 秒 → 分钟：除以 60，保留整数
-      displayValue.value = Math.round(displayValue.value / 60);
-    }
-  }
+// 切分模式启用状态
+const enabledModes = ref({
+  duration: true,
+  size: true
 });
 
-// 新增：监听展示值变化，同步更新实际秒数值
-watch(displayValue, (newVal) => {
+// 按时长配置
+const durationUnit = ref<'minutes' | 'seconds'>('minutes');
+const durationDisplay = ref(20);
+
+// 按大小配置
+const sizeValue = ref(1024);
+
+// 缓冲配置
+const useOverlapHandles = ref<boolean>(false);
+const overlapDuration = ref<number>(10.0);
+
+// 向后兼容的计算属性
+const mode = computed(() => {
+  if (enabledModes.value.duration && !enabledModes.value.size) return 'duration';
+  if (enabledModes.value.size && !enabledModes.value.duration) return 'size';
+  return 'duration'; // 多选时默认显示按时长
+});
+
+const targetValue = computed(() => {
   if (mode.value === 'duration') {
-    targetValue.value = targetUnit.value === 'minutes' ? newVal * 60 : newVal;
+    return durationUnit.value === 'minutes' ? durationDisplay.value * 60 : durationDisplay.value;
   }
+  return sizeValue.value;
+});
+
+// 缓冲是否禁用（单选按大小时禁用）
+const bufferDisabled = computed(() => {
+  const enabledCount = Object.values(enabledModes.value).filter(Boolean).length;
+  // 只有按大小模式被勾选时（无论单选还是多选后取消按时长），都禁用缓冲
+  return enabledCount === 1 && enabledModes.value.size && !enabledModes.value.duration;
+});
+
+// 处理模式切换，确保至少保留一个
+function handleModeToggle(mode: 'duration' | 'size', event: Event) {
+  const checkbox = event.target as HTMLInputElement;
+  const newValue = checkbox.checked;
+
+  // 如果是取消勾选，检查是否至少还有一个模式
+  if (!newValue) {
+    const otherMode = mode === 'duration' ? 'size' : 'duration';
+    if (!enabledModes.value[otherMode]) {
+      // 阻止取消，至少保留一个
+      checkbox.checked = true;
+      return;
+    }
+  }
+
+  // 更新状态
+  enabledModes.value[mode] = newValue;
+
+  // 如果只剩按大小，自动关闭缓冲
+  const enabledCount = Object.values(enabledModes.value).filter(Boolean).length;
+  if (enabledCount === 1 && enabledModes.value.size && !enabledModes.value.duration) {
+    useOverlapHandles.value = false;
+  }
+}
+
+// 缓冲警告横幅显示条件
+const showBufferWarning = computed(() => {
+  const enabledCount = Object.values(enabledModes.value).filter(Boolean).length;
+  return enabledCount > 1 && enabledModes.value.size && useOverlapHandles.value;
+});
+
+// 缓冲提示文字
+const bufferHintText = computed(() => {
+  if (bufferDisabled.value) {
+    return '按大小模式不支持交叠缓冲（会导致切片大小不准确）';
+  }
+  return '在切口两端延伸冗余时间，便于后期转场';
 });
 
 const currentModeComponent = computed(() => {
@@ -192,27 +257,14 @@ const canAnalyze = computed(() => {
 });
 
 const inputLabel = computed(() => {
-  if (mode.value === 'size') return '目标大小 (MB)';
+  if (mode.value === 'size') return '目标大小';
   return '目标时长';
 });
 
 const inputPlaceholder = computed(() => {
-  if (mode.value === 'size') return '50';
-  return targetUnit.value === 'minutes' ? '20' : '1200';
+  if (mode.value === 'size') return '1024';
+  return durationUnit.value === 'minutes' ? '20' : '1200';
 });
-
-// 方法
-function handleModeChange(newMode: 'duration' | 'size') {
-  mode.value = newMode;
-  if (newMode === 'duration') {
-    targetUnit.value = 'minutes';
-    displayValue.value = 20;
-    targetValue.value = 1200;
-  } else {
-    displayValue.value = 50;
-    targetValue.value = 50;
-  }
-}
 
 /**
  * 生成切片预览
@@ -231,8 +283,18 @@ async function handleAnalyze() {
   try {
     const params: SliceAnalyzeParams = {
       filePath: '',
-      mode: mode.value,
-      targetValue: targetValue.value,
+      modes: [
+        ...(enabledModes.value.duration ? [{
+          mode: 'duration' as const,
+          targetValue: durationUnit.value === 'minutes' ? durationDisplay.value * 60 : durationDisplay.value,
+          enabled: true
+        }] : []),
+        ...(enabledModes.value.size ? [{
+          mode: 'size' as const,
+          targetValue: sizeValue.value,
+          enabled: true
+        }] : [])
+      ],
       useOverlapHandles: useOverlapHandles.value,
       overlapDuration: overlapDuration.value,
     };
@@ -240,7 +302,7 @@ async function handleAnalyze() {
     if (videos.length === 1) {
       params.filePath = videos[0].path;
       const result = await window.motionSlice.analyzeSlices(params);
-      sliceStore.setPreviewSlices(result.segments);
+      sliceStore.setPreviewSlices(result.segments, result);
       // 不操作 batchSliceGroups（单选模式不触碰批量轨数据）
 
       // 自动创建导出任务（使用视频路径作为唯一标识，避免重复添加）
@@ -387,50 +449,90 @@ async function handleAnalyze() {
 }
 
 /* Radio 按钮组 */
-.radio-group {
+/* Checkbox 组 */
+.checkbox-group {
   display: flex;
-  gap: var(--vt-space-3);
+  gap: var(--vt-space-4);
 }
 
-.radio-option {
+.checkbox-option {
   display: flex;
   align-items: center;
   gap: var(--vt-space-2);
   cursor: pointer;
 }
 
-.radio-input {
-  width: 16px;
-  height: 16px;
+.vt-checkbox {
+  width: 24px;
+  height: 24px;
   appearance: none;
   border: 2px solid var(--vt-border);
-  border-radius: 50%;
+  border-radius: var(--vt-radius-sm);
   cursor: pointer;
   position: relative;
   transition: all 180ms ease;
+  flex-shrink: 0;
 }
 
-.radio-input:checked {
+.vt-checkbox:hover {
   border-color: var(--vt-primary);
-  background: var(--vt-primary);
 }
 
-.radio-input:checked::before {
+.vt-checkbox:checked {
+  background: var(--vt-primary);
+  border-color: var(--vt-primary);
+}
+
+.vt-checkbox:checked::after {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  left: 7px;
+  top: 3px;
   width: 6px;
-  height: 6px;
-  background: var(--vt-text);
-  border-radius: 50%;
+  height: 10px;
+  border: solid var(--vt-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
-.radio-label {
+.checkbox-label {
   font-size: 14px;
   color: var(--vt-text-regular);
   user-select: none;
+}
+
+/* 模式配置区 */
+.mode-config {
+  padding-left: var(--vt-space-6);
+  border-left: 2px solid var(--vt-border);
+}
+
+.unit-label {
+  padding: 0 var(--vt-space-3);
+  font-size: 13px;
+  color: var(--vt-text-secondary);
+  font-weight: 500;
+}
+
+/* 缓冲警告横幅 */
+.buffer-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--vt-radius-md);
+}
+
+.warning-icon {
+  font-size: 16px;
+}
+
+.warning-text {
+  font-size: 12px;
+  color: var(--vt-text-regular);
+  line-height: 1.4;
 }
 
 /* Switch 开关 */

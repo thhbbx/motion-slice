@@ -96,6 +96,7 @@ export interface SliceAnalyzeResult {
   appliedMode: SliceMode; // 新增
   estimatedSizes?: number[]; // 新增
   needsSlicing: boolean; // 新增
+  durationAdjusted?: boolean; // 新增：是否因缓冲与大小冲突自动调整了时长
 }
 ```
 
@@ -167,6 +168,31 @@ git commit -m "feat(类型): 扩展切片类型定义支持多选模式
 **文件：**
 - 修改：`src/main/handlers/slice-handler.ts`
 
+### ⚠️ 重要：缓冲与大小限制冲突处理
+
+**问题描述：**
+当同时启用"按时长"和"按大小"模式，且开启交叠缓冲时，如果视频按时长切分，加上缓冲后可能超过大小限制。
+
+**示例：**
+- 设置：1 分钟 + 100 MB + 10 秒缓冲
+- 视频：3分18秒，309.9 MB，码率约 1.56 MB/s
+- 按时长切分：每片 70 秒（60秒核心 + 10秒缓冲）= 109 MB **超过 100 MB 限制** ❌
+
+**解决方案：自动调整目标时长（方案 1）**
+
+在 `determineFirstReachedMode` 函数中，当按时长切分且启用了缓冲和按大小模式时：
+1. 计算视频码率：`mbPerSecond = fileSizeMB / videoDuration`
+2. 计算加缓冲后允许的最大时长：`maxDuration = targetSizeMB / mbPerSecond`
+3. 计算调整后的核心时长：`adjustedDuration = maxDuration - 2 * overlapDuration`
+4. 如果 `adjustedDuration < targetDuration`，使用调整后的值
+
+**用户提示：**
+- 在"批量切片策略汇总"中显示调整说明
+- 示例文案：`"ℹ️ 提示: 启用缓冲后，按时长切分的目标时长已自动调整为 50 秒，确保加缓冲后不超过 100 MB 限制"`
+- 在视频列表中，调整过的视频模式徽章旁显示 `⚡` 图标表示"已优化"
+
+---
+
 - [ ] **步骤 1：新增 determineFirstReachedMode 函数**
 
 在 `slice-handler.ts` 中，在 `sliceBySize` 函数之后添加：
@@ -174,28 +200,55 @@ git commit -m "feat(类型): 扩展切片类型定义支持多选模式
 ```typescript
 /**
  * 判断哪个模式先到（第一个切点）
+ * 支持缓冲与大小限制冲突时的自动调整
  */
 function determineFirstReachedMode(
   videoDuration: number,
   fileSizeMB: number,
-  modes: SliceModeConfig[]
-): { mode: SliceMode; targetDuration: number } {
+  modes: SliceModeConfig[],
+  useOverlapHandles: boolean,
+  overlapDuration: number
+): { mode: SliceMode; targetDuration: number; adjusted: boolean } {
   let minCutPoint = Infinity;
   let selectedMode: SliceMode = 'duration';
   let targetDuration = 0;
+  let adjusted = false;
+
+  const mbPerSecond = fileSizeMB / videoDuration;
+  
+  // 查找是否同时启用按大小模式
+  const sizeMode = modes.find(m => m.enabled && m.mode === 'size');
+  const sizeLimitMB = sizeMode?.targetValue;
 
   for (const config of modes) {
     if (!config.enabled) continue;
 
     if (config.mode === 'duration') {
-      const cutPoint = config.targetValue;
+      let cutPoint = config.targetValue;
+      
+      // 如果启用缓冲且有大小限制，检查是否需要调整
+      if (useOverlapHandles && overlapDuration > 0 && sizeLimitMB) {
+        const durationWithBuffer = cutPoint + 2 * overlapDuration;
+        const sizeWithBuffer = durationWithBuffer * mbPerSecond;
+        
+        if (sizeWithBuffer > sizeLimitMB) {
+          // 需要调整：确保加缓冲后不超过大小限制
+          const maxAllowedDuration = sizeLimitMB / mbPerSecond;
+          const adjustedCoreDuration = maxAllowedDuration - 2 * overlapDuration;
+          
+          if (adjustedCoreDuration > 0) {
+            cutPoint = adjustedCoreDuration;
+            adjusted = true;
+          }
+        }
+      }
+      
       if (cutPoint < minCutPoint) {
         minCutPoint = cutPoint;
         selectedMode = 'duration';
-        targetDuration = config.targetValue;
+        targetDuration = cutPoint;
       }
     } else if (config.mode === 'size') {
-      const mbPerSecond = fileSizeMB / videoDuration;
       const cutPoint = config.targetValue / mbPerSecond;
       if (cutPoint < minCutPoint) {
         minCutPoint = cutPoint;
@@ -205,7 +258,7 @@ function determineFirstReachedMode(
     }
   }
 
-  return { mode: selectedMode, targetDuration };
+  return { mode: selectedMode, targetDuration, adjusted };
 }
 ```
 
@@ -326,11 +379,19 @@ async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnal
       totalCount: 1,
       videoDuration,
       appliedMode: modes.find(m => m.enabled)?.mode || 'duration',
-      needsSlicing: false
+      needsSlicing: false,
+      durationAdjusted: false // 新增字段
     };
   }
 
-  const { mode: appliedMode, targetDuration } = determineFirstReachedMode(videoDuration, fileSizeMB, modes);
+  const { mode: appliedMode, targetDuration, adjusted } = determineFirstReachedMode(
+    videoDuration,
+    fileSizeMB,
+    modes,
+    useOverlapHandles,
+    overlapDuration
+  );
+  
   const shouldApplyBuffer = useOverlapHandles && appliedMode !== 'size';
 
   const segments = sliceByDuration(
@@ -351,7 +412,8 @@ async function analyzeVideoSlices(params: SliceAnalyzeParams): Promise<SliceAnal
     videoDuration,
     appliedMode,
     estimatedSizes,
-    needsSlicing: true
+    needsSlicing: true,
+    durationAdjusted: adjusted // 新增字段，表示是否调整过时长
   };
 }
 ```
@@ -759,6 +821,160 @@ git commit -m "feat(UI): SlicerSingleMode 显示切片预估大小
 
 - 切片列表卡片新增大小显示
 - 格式：约 X.X MB"
+```
+
+---
+
+## 任务 5.5：批量策略汇总显示缓冲与调整提示
+
+**文件：**
+- 修改：`src/components/workspace/BatchPolicyCard.vue`
+- 修改：`src/components/tools/SlicerBatchMode.vue`
+- 修改：`src/components/tools/ToolSlicer.vue`
+
+- [ ] **步骤 1：扩展 BatchPolicyCard props**
+
+在 `BatchPolicyCard.vue` 中添加缓冲参数：
+
+```typescript
+const props = withDefaults(defineProps<{
+  mode?: 'duration' | 'size';
+  targetValue?: number;
+  enabledModes?: { duration: boolean; size: boolean };
+  durationDisplay?: number;
+  durationUnit?: 'minutes' | 'seconds';
+  sizeValue?: number;
+  useOverlapHandles?: boolean;
+  overlapDuration?: number;
+}>(), {
+  mode: 'duration',
+  targetValue: 60,
+  useOverlapHandles: false,
+  overlapDuration: 0
+});
+```
+
+- [ ] **步骤 2：添加缓冲信息显示**
+
+在模板中添加缓冲信息行：
+
+```vue
+<div v-if="showBufferInfo" class="policy-item">
+  <span class="label">交叠缓冲:</span>
+  <span class="value">{{ bufferInfoText }}</span>
+</div>
+<div v-if="showAdjustmentWarning" class="policy-warning">
+  <span class="warning-icon">ℹ️</span>
+  <span class="warning-text">{{ adjustmentWarningText }}</span>
+</div>
+```
+
+- [ ] **步骤 3：添加计算属性**
+
+```typescript
+const showBufferInfo = computed(() => {
+  return props.useOverlapHandles && props.overlapDuration > 0;
+});
+
+const bufferInfoText = computed(() => {
+  if (!props.useOverlapHandles || props.overlapDuration === 0) return '';
+
+  const hasMultipleModes = props.enabledModes &&
+    props.enabledModes.duration &&
+    props.enabledModes.size;
+
+  if (hasMultipleModes) {
+    return `${props.overlapDuration.toFixed(1)} 秒（仅按时长切分时应用）`;
+  }
+
+  return `${props.overlapDuration.toFixed(1)} 秒`;
+});
+
+const showAdjustmentWarning = computed(() => {
+  // 当同时启用按时长和按大小，且开启缓冲时显示
+  return props.enabledModes &&
+    props.enabledModes.duration &&
+    props.enabledModes.size &&
+    props.useOverlapHandles &&
+    props.overlapDuration > 0;
+});
+
+const adjustmentWarningText = computed(() => {
+  if (!showAdjustmentWarning.value) return '';
+  
+  const durationMinutes = props.durationDisplay || 0;
+  const sizeMB = props.sizeValue || 0;
+  
+  return `启用缓冲后,按时长切分的视频目标时长可能自动调整，确保加缓冲后不超过 ${sizeMB} MB 限制`;
+});
+```
+
+- [ ] **步骤 4：添加警告样式**
+
+```css
+.policy-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--vt-space-2);
+  padding: var(--vt-space-3);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--vt-radius-md);
+  margin-top: var(--vt-space-3);
+}
+
+.policy-warning .warning-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.policy-warning .warning-text {
+  font-size: 12px;
+  color: var(--vt-text-regular);
+  line-height: 1.5;
+}
+```
+
+- [ ] **步骤 5：更新 ToolSlicer 和 SlicerBatchMode 传递参数**
+
+在 `ToolSlicer.vue` 中：
+
+```vue
+<component
+  :is="currentModeComponent"
+  :mode="mode"
+  :target-value="targetValue"
+  :enabled-modes="enabledModes"
+  :duration-display="durationDisplay"
+  :duration-unit="durationUnit"
+  :size-value="sizeValue"
+  :use-overlap-handles="useOverlapHandles"
+  :overlap-duration="overlapDuration"
+/>
+```
+
+在 `SlicerBatchMode.vue` 中添加对应 props 并透传。
+
+- [ ] **步骤 6：测试缓冲提示**
+
+```bash
+npm start
+```
+
+测试点：
+- 单选按时长 + 开启缓冲：显示缓冲时长
+- 多选 + 开启缓冲：显示缓冲时长 + "仅按时长切分时应用"
+- 多选 + 开启缓冲：显示调整警告
+
+- [ ] **步骤 7：Commit 缓冲提示功能**
+
+```bash
+git add src/components/workspace/BatchPolicyCard.vue src/components/tools/SlicerBatchMode.vue src/components/tools/ToolSlicer.vue
+git commit -m "feat(UI): 批量策略汇总显示缓冲与调整提示
+
+- 新增交叠缓冲信息行
+- 多选模式显示缓冲应用条件
+- 新增自动调整警告提示"
 ```
 
 ---

@@ -1,19 +1,23 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { VideoSegment } from '../types/slice';
+import type { VideoSegment, SliceAnalyzeResult } from '../types/slice';
 
 export const useSliceStore = defineStore('slice', () => {
   const previewSlices = ref<VideoSegment[]>([]);
   const activeSliceId = ref<string | null>(null);
   const isAnalyzing = ref(false);
+  const lastAnalyzeResult = ref<SliceAnalyzeResult | null>(null);
 
   const activeSlice = computed(() => {
     if (!activeSliceId.value) return null;
     return previewSlices.value.find(s => s.id === activeSliceId.value) || null;
   });
 
-  function setPreviewSlices(segments: VideoSegment[]) {
+  function setPreviewSlices(segments: VideoSegment[], result?: SliceAnalyzeResult) {
     previewSlices.value = segments;
+    if (result) {
+      lastAnalyzeResult.value = result;
+    }
   }
 
   function setActiveSlice(id: string | null) {
@@ -27,6 +31,7 @@ export const useSliceStore = defineStore('slice', () => {
     previewSlices.value = [];
     activeSliceId.value = null;
     isAnalyzing.value = false;
+    lastAnalyzeResult.value = null;
     console.log('[SliceStore] 工作区状态已重置');
   }
 
@@ -38,6 +43,7 @@ export const useSliceStore = defineStore('slice', () => {
     previewSlices,
     activeSliceId,
     isAnalyzing,
+    lastAnalyzeResult,
     activeSlice,
     setPreviewSlices,
     setActiveSlice,
