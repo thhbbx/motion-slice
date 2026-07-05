@@ -439,13 +439,34 @@ export function registerExportHandler() {
         throw new Error('主窗口未就绪');
       }
 
-      // 逐个处理任务
+      // 逐个处理任务（Fail-Safe 模式：一个失败不影响其他任务）
+      const batchErrors: string[] = [];
+
       for (const task of tasks) {
-        if (task.toolId === 'slicer') {
-          await exportSlicerTask(task, outputDir, format, quality, mainWindow);
-        } else {
-          console.warn(`[ExportHandler] 未知工具类型: ${task.toolId}`);
+        try {
+          if (task.toolId === 'slicer') {
+            await exportSlicerTask(task, outputDir, format, quality, mainWindow);
+          } else {
+            console.warn(`[ExportHandler] 未知工具类型: ${task.toolId}`);
+            batchErrors.push(`任务 ${task.title || task.id} 失败: 未知工具类型 ${task.toolId}`);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`[ExportHandler] 任务 ${task.id} 导出失败:`, error);
+          batchErrors.push(`${task.title || task.id} 失败: ${errorMessage}`);
+          // 继续处理下一个任务
+          continue;
         }
+      }
+
+      // 判断是否有失败任务
+      if (batchErrors.length > 0) {
+        const errorSummary = batchErrors.map((err, index) => `  ${index + 1}. ${err}`).join('\n');
+        console.error(`[ExportHandler] 批量导出存在部分失败 (${batchErrors.length}/${tasks.length}):\n${errorSummary}`);
+        return {
+          success: false,
+          error: `批量导出存在部分失败 (${batchErrors.length}/${tasks.length}):\n\n${errorSummary}`
+        };
       }
 
       console.log('[ExportHandler] 所有任务导出完成');

@@ -40,42 +40,71 @@ const exportStore = useExportStore();
 // 全局 IPC 导出进度监听器（不会因 Tab 切换而卸载）
 onMounted(() => {
   window.motionSlice.onExportProgress((event) => {
-    // 尝试三种匹配方式：
-    // 1. 直接匹配 taskId（单选模式：slicer-videoPath）
-    let matchingItem = exportStore.queueItems.find(
-      item => item.taskId === event.taskId
-    );
+    // 主进程发送的 event.taskId 格式：
+    // - 单选模式: 'slicer-videoPath'
+    // - 多选模式: 'export-videoId'
 
-    let isSingleMode = false; // 是否为单选模式
+    // 前端 queueItems 的 taskId 格式：
+    // - 单选模式: 'slicer-videoPath-segment-0', 'slicer-videoPath-segment-1', ...
+    // - 多选模式: 'videoPath-slice-0', 'videoPath-slice-1', ...
 
-    // 2. 批量模式：event.taskId 格式是 export-videoPath，提取 videoPath 后根据 sliceLabel 匹配
-    if (!matchingItem && event.taskId.startsWith('export-')) {
+    // 尝试匹配方式：
+    // 1. 单选模式：根据 event.taskId 前缀 + event.current 索引匹配
+    if (event.taskId.startsWith('slicer-')) {
+      // 单选模式：找到当前正在处理的切片（根据 current 索引）
+      const segmentTaskId = `${event.taskId}-segment-${event.current - 1}`;
+      const currentSegment = exportStore.queueItems.find(
+        item => item.taskId === segmentTaskId
+      );
+
+      if (currentSegment) {
+        // 标记当前切片为已完成
+        currentSegment.status = 'success';
+        currentSegment.progress = 100;
+
+        // 如果还有下一个切片，标记为处理中
+        if (event.current < event.total) {
+          const nextSegmentTaskId = `${event.taskId}-segment-${event.current}`;
+          const nextSegment = exportStore.queueItems.find(
+            item => item.taskId === nextSegmentTaskId
+          );
+          if (nextSegment) {
+            nextSegment.status = 'processing';
+          }
+        }
+
+        console.log('[App] 单选模式进度更新:', {
+          completed: event.current,
+          total: event.total,
+          currentLabel: event.currentLabel
+        });
+        return;
+      }
+    }
+
+    // 2. 批量模式：根据 videoPath + sliceLabel 匹配
+    if (event.taskId.startsWith('export-')) {
       const videoPath = event.taskId.replace(/^export-/, '');
-      matchingItem = exportStore.queueItems.find(
+      const matchingItem = exportStore.queueItems.find(
         item => item.videoPath === videoPath && item.sliceLabel === event.currentLabel
       );
-    } else if (matchingItem) {
-      isSingleMode = true; // 单选模式
+
+      if (matchingItem) {
+        matchingItem.status = 'success';
+        matchingItem.progress = 100;
+        matchingItem.currentIndex = event.current;
+        matchingItem.totalCount = event.total;
+        console.log('[App] 批量模式进度更新:', event.currentLabel);
+        return;
+      }
     }
 
-    if (!matchingItem) {
-      console.warn('[App] 未找到匹配的队列项:', { taskId: event.taskId, currentLabel: event.currentLabel });
-      return;
-    }
-
-    if (isSingleMode) {
-      // 单选模式：一个任务包含多个切片，根据 current/total 计算进度
-      matchingItem.status = event.current === event.total ? 'success' : 'processing';
-      matchingItem.progress = event.total > 0 ? Math.round((event.current / event.total) * 100) : 0;
-      matchingItem.currentIndex = event.current;
-      matchingItem.totalCount = event.total;
-    } else {
-      // 批量模式：每个切片是独立的队列项，收到进度事件 = 该切片已完成
-      matchingItem.status = 'success';
-      matchingItem.progress = 100;
-      matchingItem.currentIndex = event.current;
-      matchingItem.totalCount = event.total;
-    }
+    console.warn('[App] 未找到匹配的队列项:', {
+      taskId: event.taskId,
+      currentLabel: event.currentLabel,
+      current: event.current,
+      total: event.total
+    });
   });
 });
 
