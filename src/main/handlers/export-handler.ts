@@ -374,13 +374,6 @@ async function exportSlicerTask(
       console.error(`[ExportHandler] 切片 ${segment.label} 导出失败:`, error);
       // 用户界面只显示简化的错误信息
       failures.push(`${segment.label}: ${message}`);
-
-      // 发送失败事件给渲染进程，更新 UI 状态
-      mainWindow.webContents.send('export-segment-failed', {
-        taskId: task.id,
-        segmentLabel: segment.label,
-        error: message,
-      });
     }
   }
 
