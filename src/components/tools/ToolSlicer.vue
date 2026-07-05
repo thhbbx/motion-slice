@@ -144,11 +144,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, markRaw, watch } from 'vue';
+import { computed, markRaw } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useSliceStore } from '../../store/useSliceStore';
 import { useExportStore } from '../../store/useExportStore';
+import { useToolConfigStore } from '../../store/useToolConfigStore';
 import type { SliceAnalyzeParams } from '../../types/slice';
 import type { ExportTask } from '../../types/export';
 import SlicerSingleMode from './SlicerSingleMode.vue';
@@ -165,26 +166,42 @@ const props = withDefaults(defineProps<Props>(), {
 const videoStore = useVideoStore();
 const sliceStore = useSliceStore();
 const exportStore = useExportStore();
+const toolConfigStore = useToolConfigStore();
 
 const { activeVideo, selectedVideos, isBatchMode } = storeToRefs(videoStore);
 const { isAnalyzing } = storeToRefs(sliceStore);
+const { slicerConfig } = storeToRefs(toolConfigStore);
 
-// 切分模式启用状态
-const enabledModes = ref({
-  duration: true,
-  size: true
+// 使用 Store 中的配置（通过计算属性提供便捷访问）
+const enabledModes = computed({
+  get: () => slicerConfig.value.enabledModes,
+  set: (val) => { slicerConfig.value.enabledModes = val; }
 });
 
-// 按时长配置
-const durationUnit = ref<'minutes' | 'seconds'>('minutes');
-const durationDisplay = ref(20);
+const durationUnit = computed({
+  get: () => slicerConfig.value.durationUnit,
+  set: (val) => { slicerConfig.value.durationUnit = val; }
+});
 
-// 按大小配置
-const sizeValue = ref(1024);
+const durationDisplay = computed({
+  get: () => slicerConfig.value.durationDisplay,
+  set: (val) => { slicerConfig.value.durationDisplay = val; }
+});
 
-// 缓冲配置
-const useOverlapHandles = ref<boolean>(false);
-const overlapDuration = ref<number>(10.0);
+const sizeValue = computed({
+  get: () => slicerConfig.value.sizeValue,
+  set: (val) => { slicerConfig.value.sizeValue = val; }
+});
+
+const useOverlapHandles = computed({
+  get: () => slicerConfig.value.useOverlapHandles,
+  set: (val) => { slicerConfig.value.useOverlapHandles = val; }
+});
+
+const overlapDuration = computed({
+  get: () => slicerConfig.value.overlapDuration,
+  set: (val) => { slicerConfig.value.overlapDuration = val; }
+});
 
 // 向后兼容的计算属性
 const mode = computed(() => {

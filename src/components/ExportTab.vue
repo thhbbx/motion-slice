@@ -24,11 +24,11 @@
         <label class="form-label">
           <span class="label-text">输出格式</span>
         </label>
-        <select v-model="exportConfig.format" class="vt-select">
-          <option value="mp4">MP4</option>
-          <option value="mov">MOV</option>
-          <option value="avi">AVI</option>
-        </select>
+        <ToolSelector
+          v-model="exportConfig.format"
+          :options="formatOptions"
+          :disabled="isExporting"
+        />
       </div>
 
       <!-- 视频质量 -->
@@ -163,8 +163,10 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useExportStore } from '../store/useExportStore';
 import { useVideoStore } from '../store/useVideoStore';
+import { useToolConfigStore } from '../store/useToolConfigStore';
 import type { ExportTaskStatus } from '../types/export';
 import { formatPathFromRoot } from '../utils/pathFormat';
+import ToolSelector from './common/ToolSelector.vue';
 
 const exportStore = useExportStore();
 const { pendingTasks, queueItems, hasPendingTasks, isExporting } = storeToRefs(exportStore);
@@ -172,22 +174,27 @@ const { pendingTasks, queueItems, hasPendingTasks, isExporting } = storeToRefs(e
 const videoStore = useVideoStore();
 const { isBatchMode, selectedVideos, batchSliceGroups } = storeToRefs(videoStore);
 
+const toolConfigStore = useToolConfigStore();
+const { exportConfig } = storeToRefs(toolConfigStore);
+
 const exportError = ref(''); // 导出错误信息
 
-// 导出配置
-const exportConfig = ref({
-  format: 'mp4' as 'mp4' | 'mov' | 'avi',
-  quality: 100,
-  outputDir: '',
-});
+// 格式选项
+const formatOptions = [
+  { value: 'mp4', label: 'MP4' },
+  { value: 'mov', label: 'MOV' },
+  { value: 'avi', label: 'AVI' }
+];
 
-// 初始化默认下载路径
+// 初始化默认下载路径（仅在首次加载时）
 onMounted(async () => {
-  try {
-    const defaultPath = await window.motionSlice.getDefaultDownloadPath();
-    exportConfig.value.outputDir = defaultPath;
-  } catch (error) {
-    console.error('获取默认下载路径失败:', error);
+  if (!exportConfig.value.outputDir) {
+    try {
+      const defaultPath = await window.motionSlice.getDefaultDownloadPath();
+      toolConfigStore.setDefaultOutputDir(defaultPath);
+    } catch (error) {
+      console.error('获取默认下载路径失败:', error);
+    }
   }
 });
 
@@ -571,25 +578,6 @@ watch(selectedVideos, () => {
 .label-value {
   font-size: 12px;
   color: var(--vt-text-secondary);
-}
-
-.vt-select {
-  width: 100%;
-  height: 40px;
-  padding: 0 var(--vt-space-3);
-  border: 1px solid var(--vt-border);
-  border-radius: var(--vt-radius-sm);
-  background: var(--vt-bg-elevated);
-  color: var(--vt-text-regular);
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
-}
-
-.vt-select:focus {
-  border-color: var(--vt-border-active);
-  box-shadow: 0 0 0 4px var(--vt-primary-glow);
 }
 
 .vt-slider {
