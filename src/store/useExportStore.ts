@@ -49,6 +49,10 @@ export const useExportStore = defineStore('export', () => {
       if (current === total && total > 0) {
         item.status = 'completed';
       }
+      console.log(`[ExportStore] 队列项进度已更新: ${taskId} (${current}/${total})`);
+    } else {
+      console.warn(`[ExportStore] 未找到匹配的队列项: ${taskId}`);
+      console.warn(`[ExportStore] 当前队列项列表:`, queueItems.value.map(q => q.taskId));
     }
   }
 

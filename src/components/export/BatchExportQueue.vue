@@ -277,6 +277,9 @@ async function handleExecute() {
       totalCount: group.slices.filter(s => s.isActive).length,
     }));
 
+  console.log('[BatchExport] 创建队列项:', queueItemsData.length);
+  console.log('[BatchExport] 队列项 taskId 列表:', queueItemsData.map(q => q.taskId));
+
   // 手动设置队列
   exportStore.$patch({
     queueItems: queueItemsData
