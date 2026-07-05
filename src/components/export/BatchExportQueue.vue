@@ -92,7 +92,7 @@
  * - 执行批量导出（串行队列）
  * - 实时同步导出进度
  */
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useVideoStore } from '../../store/useVideoStore';
 import { useExportStore } from '../../store/useExportStore';
@@ -211,6 +211,27 @@ onMounted(async () => {
   } catch (error) {
     console.warn('[BatchExport] 获取默认下载目录失败:', error);
   }
+
+  // 监听导出进度事件
+  window.motionSlice.onExportProgress((event) => {
+    console.log('[BatchExport] 收到进度事件:', event);
+    exportStore.updateQueueProgress(event.taskId, event.current, event.total);
+  });
+
+  // 监听导出失败事件
+  window.motionSlice.onExportSegmentFailed((event) => {
+    console.error('[BatchExport] 切片导出失败:', event);
+    // 将任务状态设置为失败
+    exportStore.setQueueStatus(event.taskId, 'failed');
+    // 显示错误信息
+    exportError.value = `${event.segmentLabel}: ${event.error}`;
+  });
+});
+
+// 组件卸载时移除事件监听
+onBeforeUnmount(() => {
+  window.motionSlice.offExportProgress();
+  window.motionSlice.offExportSegmentFailed();
 });
 
 // 监听视频切换，清除错误状态和导出队列
@@ -243,24 +264,20 @@ async function handleExecute() {
   isExporting.value = true;
   exportError.value = ''; // 清除之前的错误
 
-  // 直接设置全局导出队列为 processing 状态
-  // 为每个切片创建队列项，taskId 格式：videoPath-slice-index
-  const queueItemsData = batchSliceGroups.value.flatMap(group => {
-    return group.slices
-      .filter(s => s.isActive)
-      .map((slice, index) => ({
-        taskId: `${group.videoPath}-slice-${index}`, // 使用 videoPath + slice index 作为唯一 ID
-        videoPath: group.videoPath, // 保存 videoPath 用于匹配
-        sliceLabel: slice.label, // 保存标签用于匹配
-        title: `${group.videoName} - ${slice.label}`,
-        status: 'processing' as const,
-        progress: 0,
-        currentIndex: 0,
-        totalCount: 0,
-      }));
-  });
+  // 为每个视频创建一个队列项（一个视频对应一个任务）
+  const queueItemsData = batchSliceGroups.value
+    .filter(group => group.slices.some(s => s.isActive))
+    .map(group => ({
+      taskId: `export-${group.videoId}`, // 与导出任务的 ID 一致
+      videoPath: group.videoPath,
+      title: `${group.videoName} - 切片导出`,
+      status: 'processing' as const,
+      progress: 0,
+      currentIndex: 0,
+      totalCount: group.slices.filter(s => s.isActive).length,
+    }));
 
-  // 手动设置队列（绕过 initQueue 的限制）
+  // 手动设置队列
   exportStore.$patch({
     queueItems: queueItemsData
   });

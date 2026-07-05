@@ -127,10 +127,25 @@ contextBridge.exposeInMainWorld('motionSlice', {
   },
 
   /**
+   * 监听导出失败事件
+   * @param callback 失败回调函数
+   */
+  onExportSegmentFailed: (callback: (event: { taskId: string; segmentLabel: string; error: string }) => void): void => {
+    ipcRenderer.on('export-segment-failed', (_, data) => callback(data));
+  },
+
+  /**
    * 移除导出进度监听
    */
   offExportProgress: (): void => {
     ipcRenderer.removeAllListeners('export-progress');
+  },
+
+  /**
+   * 移除导出失败监听
+   */
+  offExportSegmentFailed: (): void => {
+    ipcRenderer.removeAllListeners('export-segment-failed');
   },
 });
 
@@ -152,7 +167,9 @@ declare global {
       selectOutputDir: () => Promise<string | null>;
       executeExport: (params: ExportExecuteParams) => Promise<ExportExecuteResult>;
       onExportProgress: (callback: (event: ExportProgressEvent) => void) => void;
+      onExportSegmentFailed: (callback: (event: { taskId: string; segmentLabel: string; error: string }) => void) => void;
       offExportProgress: () => void;
+      offExportSegmentFailed: () => void;
     };
   }
 }
