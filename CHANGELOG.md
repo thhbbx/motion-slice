@@ -1,5 +1,40 @@
 # MotionSlice 更新日志
 
+## [未发布]
+
+### 🐛 Bug 修复
+
+#### 修复多音轨视频切分时音频流丢失问题 (58d43a3)
+**问题描述**：
+- 专业摄像设备录制的多音轨视频（如 8 条单声道音轨）切分后只保留第一条音轨
+- 导致切分后的视频在所有平台上都听不到声音或只有部分音轨
+
+**根本原因**：
+- FFmpeg 流映射参数 `-map 0:v:0 -map 0:a:0?` 只映射第一条视频流和第一条音频流
+- 对于包含多条音频流的源视频，其他 7 条音轨被丢弃
+
+**解决方案**：
+- 将流映射修改为 `-map 0:v -map 0:a`，映射所有视频流和音频流
+- 自动过滤 timecode/subtitle/data 等数据流，避免 MP4 容器报错
+- 现有编码参数（`-c:v`, `-c:a`）自动应用到所有对应类型的流
+
+**附加收益**：
+- 解决了 PCM 音频在 Windows 上兼容性差的问题
+- 导出时自动将 PCM 转码为 AAC，使视频在 Windows/Mac 上都能正常播放
+
+**测试验证**：
+- ✅ 多音轨 MOV 无损导出为 MP4：8 条音轨全部保留
+- ✅ 多音轨 MOV 压缩导出为 MP4：8 条音轨全部保留
+- ✅ 单音轨视频回归测试：功能正常，无退化
+- ✅ 跨平台兼容性：Windows 和 Mac 都能正常播放
+
+**关联文档**：
+- 设计文档：`docs/superpowers/specs/2026-07-07-fix-multi-track-audio-export-design.md`
+- 实施计划：`docs/superpowers/plans/2026-07-07-fix-multi-track-audio-export.md`
+- 测试报告：`docs/superpowers/test-results/2026-07-07-multi-track-audio-test.md`
+
+---
+
 ## [0.0.6] - 2026-07-05
 
 ### 🐛 Bug 修复
