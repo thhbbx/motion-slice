@@ -209,7 +209,9 @@ function exportSegment(
     const command = ffmpeg(resolvedSource)
       .setStartTime(startTime)
       .setDuration(duration)
-      .outputOptions(['-map', '0:v:0', '-map', '0:a:0?']);
+      // 映射所有视频流和音频流，保留多音轨结构（如 8 条单声道音轨）
+      // 过滤掉 timecode/subtitle/data 等数据流，避免 MP4 容器报错
+      .outputOptions(['-map', '0:v', '-map', '0:a']);
 
     if (quality === 100) {
       // MP4 容器不支持直接拷贝 MOV 中常见的 PCM 音频，需保留视频流拷贝并转码音频
