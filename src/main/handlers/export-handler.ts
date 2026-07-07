@@ -209,6 +209,14 @@ function exportSegment(
   return new Promise((resolve, reject) => {
     ensureFfmpegPath();
 
+    // 如果格式为 'auto'，自动使用源视频的扩展名
+    let actualFormat = format;
+    if (format === 'auto') {
+      const sourceExt = path.extname(sourceFilePath).toLowerCase().slice(1); // 移除开头的点
+      actualFormat = sourceExt || 'mp4'; // 默认回退到 mp4
+      console.log(`[ExportHandler] 自动检测格式: ${sourceExt} (源文件: ${path.basename(sourceFilePath)})`);
+    }
+
     const duration = endTime - startTime;
     if (duration <= 0) {
       reject(new Error(`片段时间范围无效: ${startTime}s - ${endTime}s`));
@@ -227,7 +235,7 @@ function exportSegment(
       // 无损模式：所有流直接拷贝，不做任何转码
       // 切分工具的本质是时间维度的裁剪，保持原始编码格式
       command.outputOptions(['-c', 'copy']);
-      if (format === 'mp4') {
+      if (actualFormat === 'mp4') {
         command.outputOptions(['-movflags', '+faststart']);
       }
     } else {
@@ -239,7 +247,7 @@ function exportSegment(
         '-c:a', 'aac',
         '-b:a', '128k',
       ]);
-      if (format === 'mp4') {
+      if (actualFormat === 'mp4') {
         command.outputOptions(['-movflags', '+faststart']);
       }
     }
@@ -348,10 +356,18 @@ async function exportSlicerTask(
   // 逐个导出切片
   const failures: string[] = [];
 
+  // 如果格式为 'auto'，自动使用源视频的扩展名
+  let actualFormat = format;
+  if (format === 'auto') {
+    const sourceExt = path.extname(sourceFilePath).toLowerCase().slice(1); // 移除开头的点
+    actualFormat = sourceExt || 'mp4'; // 默认回退到 mp4
+    console.log(`[ExportHandler] 自动检测格式: ${actualFormat} (源文件: ${path.basename(sourceFilePath)})`);
+  }
+
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
 
-    const outputFilename = sanitizeFilename(`${baseFileName}_${segment.label}.${format}`);
+    const outputFilename = sanitizeFilename(`${baseFileName}_${segment.label}.${actualFormat}`);
     const outputPath = path.join(outputDirPath, outputFilename);
 
     console.log(
@@ -366,7 +382,7 @@ async function exportSlicerTask(
         segment.startTime,
         segment.endTime,
         quality,
-        format
+        actualFormat
       );
 
       mainWindow.webContents.send('export-progress', {

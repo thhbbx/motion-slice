@@ -181,6 +181,7 @@ const exportError = ref(''); // 导出错误信息
 
 // 格式选项
 const formatOptions = [
+  { value: 'auto', label: '与源视频相同' },
   { value: 'mp4', label: 'MP4' },
   { value: 'mov', label: 'MOV' },
   { value: 'avi', label: 'AVI' }

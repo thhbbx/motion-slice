@@ -64,9 +64,6 @@ export interface ExportQueueItem {
   videoPath?: string;
   /** 切片标签（用于匹配进度事件） */
   sliceLabel?: string;
-}
-  /** 总片段数（可选） */
-  totalCount?: number;
   /** 错误信息（仅当 status 为 'failed' 时存在） */
   error?: string;
 }
@@ -94,7 +91,7 @@ export interface ExportExecuteParams {
   /** 输出目录 */
   outputDir: string;
   /** 输出格式 */
-  format: 'mp4' | 'mov' | 'avi';
+  format: 'auto' | 'mp4' | 'mov' | 'avi';
   /** 视频质量（10-100） */
   quality: number;
 }

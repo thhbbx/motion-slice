@@ -24,7 +24,7 @@ export const useToolConfigStore = defineStore('toolConfig', () => {
 
   // ========== 导出配置 (ExportTab) ==========
   const exportConfig = ref({
-    format: 'mp4' as 'mp4' | 'mov' | 'avi',
+    format: 'auto' as 'auto' | 'mp4' | 'mov' | 'avi',
     quality: 100,
     outputDir: ''
   });
@@ -49,7 +49,7 @@ export const useToolConfigStore = defineStore('toolConfig', () => {
   function resetExportConfig(keepOutputDir = true) {
     const currentOutputDir = exportConfig.value.outputDir;
     exportConfig.value = {
-      format: 'mp4',
+      format: 'auto',
       quality: 100,
       outputDir: keepOutputDir ? currentOutputDir : ''
     };
