@@ -96,6 +96,8 @@ function parseFFmpegError(stderr: string): string {
 
   // 查找真正的错误行（通常在最后，且包含错误关键词）
   const errorPatterns = [
+    /Could not find tag for codec/i,
+    /codec not currently supported in container/i,
     /No space left on device/i,
     /Operation not permitted/i,
     /Permission denied/i,
@@ -111,6 +113,14 @@ function parseFFmpegError(stderr: string): string {
     const line = lines[i].trim();
     for (const pattern of errorPatterns) {
       if (pattern.test(line)) {
+        // PCM 音频不兼容 MP4 容器
+        if (line.includes('Could not find tag for codec') && line.includes('pcm')) {
+          return '源视频包含 PCM 音频，MP4 容器不支持。建议：(1) 导出为 MOV 格式保持无损，或 (2) 将质量调整到 99 以下自动转码为 AAC';
+        }
+        // 其他编解码器不兼容
+        if (line.includes('Could not find tag for codec') || line.includes('codec not currently supported')) {
+          return '源视频的音频/视频编码与目标容器不兼容。建议：(1) 更换导出格式（MOV/AVI），或 (2) 将质量调整到 99 以下自动转码';
+        }
         // 提取错误信息
         if (line.includes('No space left on device')) {
           return '磁盘空间不足，请清理目标磁盘后重试或更换导出目录';
@@ -214,16 +224,11 @@ function exportSegment(
       .outputOptions(['-map', '0:v', '-map', '0:a']);
 
     if (quality === 100) {
-      // MP4 容器不支持直接拷贝 MOV 中常见的 PCM 音频，需保留视频流拷贝并转码音频
+      // 无损模式：所有流直接拷贝，不做任何转码
+      // 切分工具的本质是时间维度的裁剪，保持原始编码格式
+      command.outputOptions(['-c', 'copy']);
       if (format === 'mp4') {
-        command.outputOptions([
-          '-c:v', 'copy',
-          '-c:a', 'aac',
-          '-b:a', '192k',
-          '-movflags', '+faststart',
-        ]);
-      } else {
-        command.outputOptions(['-c', 'copy']);
+        command.outputOptions(['-movflags', '+faststart']);
       }
     } else {
       const crf = Math.round(28 - (quality / 100) * 10);
