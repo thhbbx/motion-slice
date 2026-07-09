@@ -226,10 +226,17 @@ function exportSegment(
     const resolvedSource = resolveSourcePath(sourceFilePath);
     const command = ffmpeg(resolvedSource)
       .setStartTime(startTime)
-      .setDuration(duration)
-      // 映射所有视频流和音频流，保留多音轨结构（如 8 条单声道音轨）
-      // 过滤掉 timecode/subtitle/data 等数据流，避免 MP4 容器报错
-      .outputOptions(['-map', '0:v', '-map', '0:a']);
+      .setDuration(duration);
+
+    // 根据输出格式选择流映射策略
+    if (actualFormat === 'mp4') {
+      // MP4 容器限制：只映射视频和音频流，避免不兼容的流类型（如 timecode）导致报错
+      command.outputOptions(['-map', '0:v', '-map', '0:a']);
+    } else {
+      // MOV/AVI 等格式兼容性好：映射所有流（保留字幕、时间码、元数据等）
+      // 真正的切分工具：不干涉内容，完整保留原始流结构
+      command.outputOptions(['-map', '0']);
+    }
 
     if (quality === 100) {
       // 无损模式：所有流直接拷贝，不做任何转码
@@ -239,6 +246,7 @@ function exportSegment(
         command.outputOptions(['-movflags', '+faststart']);
       }
     } else {
+      // 压缩模式：视频和音频重新编码
       const crf = Math.round(28 - (quality / 100) * 10);
       command.outputOptions([
         '-c:v', 'libx264',
@@ -247,6 +255,13 @@ function exportSegment(
         '-c:a', 'aac',
         '-b:a', '128k',
       ]);
+
+      // 尝试保留其他流（字幕、数据流等），但如果容器不支持会自动跳过
+      if (actualFormat !== 'mp4') {
+        // MOV/AVI：尝试拷贝其他流（字幕、时间码等）
+        command.outputOptions(['-c:s', 'copy', '-c:d', 'copy']);
+      }
+
       if (actualFormat === 'mp4') {
         command.outputOptions(['-movflags', '+faststart']);
       }
